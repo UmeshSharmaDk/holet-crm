@@ -4,6 +4,8 @@ import React, { useState, useMemo } from "react";
 import {
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -100,6 +102,10 @@ export default function NewBookingScreen() {
   }
 
   return (
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+    >
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.topBar}>
         <Pressable onPress={() => router.back()} style={styles.backBtn}>
@@ -225,6 +231,7 @@ export default function NewBookingScreen() {
         </Pressable>
       </ScrollView>
     </View>
+    </KeyboardAvoidingView>
   );
 }
 
