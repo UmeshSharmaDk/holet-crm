@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { router } from "expo-router";
 import React, { createContext, useContext, useEffect, useState, useMemo, ReactNode } from "react";
 
 export type UserRole = "admin" | "owner" | "manager";
@@ -79,6 +80,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await AsyncStorage.multiRemove(["auth_token", "auth_user"]);
     setToken(null);
     setUser(null);
+    router.replace("/login");
   }
 
   const value = useMemo(() => ({ user, token, isLoading, login, logout }), [user, token, isLoading]);
