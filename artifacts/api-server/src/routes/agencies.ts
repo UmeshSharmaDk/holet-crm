@@ -44,6 +44,17 @@ router.post("/", requireAuth, async (req, res) => {
   }
 });
 
+router.get("/:id", requireAuth, async (req, res) => {
+  try {
+    const [agency] = await db.select().from(agenciesTable).where(eq(agenciesTable.id, parseInt(req.params.id)));
+    if (!agency) { res.status(404).json({ error: "Not Found" }); return; }
+    res.json(agency);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
 router.put("/:id", requireAuth, async (req, res) => {
   try {
     const { name, contactEmail, contactPhone } = req.body;

@@ -75,6 +75,25 @@ router.post("/", requireAuth, requireAdmin, async (req, res) => {
   }
 });
 
+router.get("/:id", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const [user] = await db
+      .select({ id: usersTable.id, email: usersTable.email, name: usersTable.name, role: usersTable.role, hotelId: usersTable.hotelId, createdAt: usersTable.createdAt })
+      .from(usersTable)
+      .where(eq(usersTable.id, parseInt(req.params.id)));
+    if (!user) { res.status(404).json({ error: "Not Found" }); return; }
+    let hotel = null;
+    if (user.hotelId) {
+      const [h] = await db.select().from(hotelsTable).where(eq(hotelsTable.id, user.hotelId));
+      hotel = h ?? null;
+    }
+    res.json({ ...user, hotel });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
 router.put("/:id", requireAuth, requireAdmin, async (req, res) => {
   try {
     const { email, name, role, hotelId, password } = req.body;

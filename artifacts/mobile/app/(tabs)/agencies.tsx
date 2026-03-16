@@ -1,23 +1,19 @@
 import { Feather } from "@expo/vector-icons";
-import React, { useState } from "react";
+import { router } from "expo-router";
+import React from "react";
 import {
   ActivityIndicator,
   Alert,
   FlatList,
-  KeyboardAvoidingView,
-  Modal,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Colors from "@/constants/colors";
-import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api";
 
 const C = Colors.light;
@@ -32,28 +28,12 @@ interface Agency {
 }
 
 export default function AgenciesScreen() {
-  const { user } = useAuth();
   const insets = useSafeAreaInsets();
   const qc = useQueryClient();
-  const [showForm, setShowForm] = useState(false);
-  const [editingAgency, setEditingAgency] = useState<Agency | null>(null);
-  const [form, setForm] = useState({ name: "", contactEmail: "", contactPhone: "" });
 
   const { data: agencies, isLoading, refetch, isFetching } = useQuery<Agency[]>({
     queryKey: ["agencies"],
     queryFn: () => api.get<Agency[]>("/agencies"),
-  });
-
-  const createMutation = useMutation({
-    mutationFn: (data: any) => api.post("/agencies", data),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["agencies"] }); closeForm(); },
-    onError: (e: any) => Alert.alert("Error", e.message),
-  });
-
-  const updateMutation = useMutation({
-    mutationFn: (data: any) => api.put(`/agencies/${editingAgency?.id}`, data),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["agencies"] }); closeForm(); },
-    onError: (e: any) => Alert.alert("Error", e.message),
   });
 
   const deleteMutation = useMutation({
@@ -61,31 +41,6 @@ export default function AgenciesScreen() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["agencies"] }),
     onError: (e: any) => Alert.alert("Error", e.message),
   });
-
-  function openNew() {
-    setEditingAgency(null);
-    setForm({ name: "", contactEmail: "", contactPhone: "" });
-    setShowForm(true);
-  }
-
-  function openEdit(a: Agency) {
-    setEditingAgency(a);
-    setForm({ name: a.name, contactEmail: a.contactEmail ?? "", contactPhone: a.contactPhone ?? "" });
-    setShowForm(true);
-  }
-
-  function closeForm() { setShowForm(false); setEditingAgency(null); }
-
-  function submit() {
-    if (!form.name.trim()) { Alert.alert("Error", "Agency name is required"); return; }
-    const data = {
-      name: form.name.trim(),
-      contactEmail: form.contactEmail.trim() || null,
-      contactPhone: form.contactPhone.trim() || null,
-      hotelId: user?.hotelId ?? undefined,
-    };
-    editingAgency ? updateMutation.mutate(data) : createMutation.mutate(data);
-  }
 
   function confirmDelete(a: Agency) {
     Alert.alert("Delete Agency", `Delete "${a.name}"?`, [
@@ -100,7 +55,7 @@ export default function AgenciesScreen() {
     <View style={[styles.container, { paddingTop: topInset }]}>
       <View style={styles.headerRow}>
         <Text style={styles.title}>Agencies</Text>
-        <Pressable style={styles.addBtn} onPress={openNew}>
+        <Pressable style={styles.addBtn} onPress={() => router.push("/agency/new" as any)}>
           <Feather name="plus" size={22} color="#fff" />
         </Pressable>
       </View>
@@ -123,7 +78,10 @@ export default function AgenciesScreen() {
             </View>
           }
           renderItem={({ item }) => (
-            <View style={styles.card}>
+            <Pressable
+              style={({ pressed }) => [styles.card, pressed && { opacity: 0.9 }]}
+              onPress={() => router.push(`/agency/edit/${item.id}` as any)}
+            >
               <View style={styles.cardLeft}>
                 <View style={styles.agencyIcon}>
                   <Feather name="briefcase" size={20} color={C.primary} />
@@ -145,59 +103,20 @@ export default function AgenciesScreen() {
                 </View>
               </View>
               <View style={styles.cardActions}>
-                <Pressable style={styles.editBtn} onPress={() => openEdit(item)}>
+                <Pressable
+                  style={styles.editBtn}
+                  onPress={() => router.push(`/agency/edit/${item.id}` as any)}
+                >
                   <Feather name="edit-2" size={16} color={C.accent} />
                 </Pressable>
                 <Pressable style={styles.deleteBtn} onPress={() => confirmDelete(item)}>
                   <Feather name="trash-2" size={16} color={C.danger} />
                 </Pressable>
               </View>
-            </View>
+            </Pressable>
           )}
         />
       )}
-
-      <Modal visible={showForm} animationType="slide" transparent>
-        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === "ios" ? "padding" : "height"}>
-          <View style={[styles.modalContent, { paddingBottom: insets.bottom + 16 }]}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{editingAgency ? "Edit Agency" : "New Agency"}</Text>
-              <Pressable onPress={closeForm}><Feather name="x" size={22} color={C.text} /></Pressable>
-            </View>
-            <ScrollView showsVerticalScrollIndicator={false}>
-              <Field label="Agency Name *" value={form.name} onChangeText={(v) => setForm((f) => ({ ...f, name: v }))} placeholder="Agency name" />
-              <Field label="Contact Email" value={form.contactEmail} onChangeText={(v) => setForm((f) => ({ ...f, contactEmail: v }))} placeholder="contact@agency.com" keyboardType="email-address" />
-              <Field label="Contact Phone" value={form.contactPhone} onChangeText={(v) => setForm((f) => ({ ...f, contactPhone: v }))} placeholder="+1 234 567 8900" keyboardType="phone-pad" />
-              <Pressable
-                style={({ pressed }) => [styles.submitBtn, pressed && { opacity: 0.85 }]}
-                onPress={submit}
-                disabled={createMutation.isPending || updateMutation.isPending}
-              >
-                {(createMutation.isPending || updateMutation.isPending)
-                  ? <ActivityIndicator color="#fff" size="small" />
-                  : <Text style={styles.submitText}>{editingAgency ? "Update Agency" : "Create Agency"}</Text>}
-              </Pressable>
-            </ScrollView>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
-    </View>
-  );
-}
-
-function Field({ label, value, onChangeText, placeholder, keyboardType }: any) {
-  return (
-    <View style={{ marginBottom: 16 }}>
-      <Text style={{ fontFamily: "Inter_600SemiBold", fontSize: 13, color: C.text, marginBottom: 6 }}>{label}</Text>
-      <TextInput
-        style={{ borderWidth: 1.5, borderColor: C.border, borderRadius: 10, padding: 12, fontFamily: "Inter_400Regular", fontSize: 14, color: C.text, backgroundColor: C.surfaceSecondary }}
-        value={value}
-        onChangeText={onChangeText}
-        placeholder={placeholder}
-        placeholderTextColor={C.textSecondary}
-        keyboardType={keyboardType ?? "default"}
-        autoCapitalize="none"
-      />
     </View>
   );
 }
@@ -220,10 +139,4 @@ const styles = StyleSheet.create({
   emptyState: { alignItems: "center", paddingTop: 80, gap: 8 },
   emptyTitle: { fontFamily: "Inter_600SemiBold", fontSize: 16, color: C.text },
   emptyText: { fontFamily: "Inter_400Regular", fontSize: 13, color: C.textSecondary },
-  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
-  modalContent: { backgroundColor: C.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24 },
-  modalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 20 },
-  modalTitle: { fontFamily: "Inter_700Bold", fontSize: 20, color: C.text },
-  submitBtn: { backgroundColor: C.primary, borderRadius: 12, paddingVertical: 16, alignItems: "center", marginTop: 8 },
-  submitText: { fontFamily: "Inter_700Bold", fontSize: 16, color: "#fff" },
 });
