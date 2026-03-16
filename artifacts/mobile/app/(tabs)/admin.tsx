@@ -4,6 +4,7 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
+  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
@@ -282,7 +283,7 @@ function FormModal({ visible, onClose, title, onSubmit, isPending, children }: {
   const insets = useSafeAreaInsets();
   return (
     <Modal visible={visible} animationType="slide" transparent>
-      <View style={styles.modalOverlay}>
+      <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === "ios" ? "padding" : "height"}>
         <View style={[styles.modalContent, { paddingBottom: insets.bottom + 16 }]}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>{title}</Text>
@@ -295,7 +296,7 @@ function FormModal({ visible, onClose, title, onSubmit, isPending, children }: {
             </Pressable>
           </ScrollView>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

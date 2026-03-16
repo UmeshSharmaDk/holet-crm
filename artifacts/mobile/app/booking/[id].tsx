@@ -234,7 +234,7 @@ export default function BookingDetailScreen() {
       </ScrollView>
 
       <Modal visible={showPayment} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === "ios" ? "padding" : "height"}>
           <View style={[styles.modalContent, { paddingBottom: insets.bottom + 16 }]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Update Payment</Text>
@@ -260,11 +260,11 @@ export default function BookingDetailScreen() {
                 : <Text style={styles.submitText}>Save Payment</Text>}
             </Pressable>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       <Modal visible={showEdit} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === "ios" ? "padding" : "height"}>
           <View style={[styles.modalContent, { paddingBottom: insets.bottom + 16, maxHeight: "92%" }]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Edit Booking</Text>
@@ -310,7 +310,7 @@ export default function BookingDetailScreen() {
               </Pressable>
             </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
