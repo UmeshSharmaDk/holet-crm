@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Colors from "@/constants/colors";
 import { api } from "@/lib/api";
+import { DatePickerField } from "@/components/DatePickerField";
 
 const C = Colors.light;
 
@@ -167,10 +168,17 @@ export default function EditBookingScreen() {
           </Row>
 
           <SectionHeader title="Dates" />
-          <Row>
-            <FormField label="Check-In" value={form.checkIn} onChangeText={(v) => update("checkIn", v)} placeholder="YYYY-MM-DD" flex />
-            <FormField label="Check-Out" value={form.checkOut} onChangeText={(v) => update("checkOut", v)} placeholder="YYYY-MM-DD" flex />
-          </Row>
+          <DatePickerField
+            label="Check-In"
+            value={form.checkIn}
+            onChange={(v) => update("checkIn", v)}
+          />
+          <DatePickerField
+            label="Check-Out"
+            value={form.checkOut}
+            onChange={(v) => update("checkOut", v)}
+            minimumDate={form.checkIn ? new Date(new Date(form.checkIn).getTime() + 86400000) : undefined}
+          />
 
           <SectionHeader title="Financials" />
           <Row>

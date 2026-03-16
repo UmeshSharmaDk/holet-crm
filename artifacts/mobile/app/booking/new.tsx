@@ -18,6 +18,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Colors from "@/constants/colors";
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api";
+import { DatePickerField } from "@/components/DatePickerField";
 
 const C = Colors.light;
 
@@ -132,14 +133,17 @@ export default function NewBookingScreen() {
         </View>
 
         <SectionHeader title="Dates" />
-        <View style={styles.row2}>
-          <View style={{ flex: 1 }}>
-            <FormField label="Check-In *" value={form.checkIn} onChangeText={(v) => update("checkIn", v)} placeholder="YYYY-MM-DD" />
-          </View>
-          <View style={{ flex: 1 }}>
-            <FormField label="Check-Out *" value={form.checkOut} onChangeText={(v) => update("checkOut", v)} placeholder="YYYY-MM-DD" />
-          </View>
-        </View>
+        <DatePickerField
+          label="Check-In *"
+          value={form.checkIn}
+          onChange={(v) => update("checkIn", v)}
+        />
+        <DatePickerField
+          label="Check-Out *"
+          value={form.checkOut}
+          onChange={(v) => update("checkOut", v)}
+          minimumDate={form.checkIn ? new Date(new Date(form.checkIn).getTime() + 86400000) : undefined}
+        />
         {nights > 0 && (
           <View style={styles.nightsBadge}>
             <Feather name="moon" size={14} color={C.accent} />
