@@ -1,11 +1,31 @@
-import OpenAI from "openai";
+import { GoogleGenAI } from "@google/genai";
 
-const apiKey = process.env["OPENAI_API_KEY"];
+const apiKey = process.env["GOOGLE_API_KEY"];
 
 if (!apiKey) {
-  console.warn("[openai] Missing OPENAI_API_KEY env var");
+  console.warn("[gemini] Missing GOOGLE_API_KEY env var");
 }
 
-export const openai = new OpenAI({
-  apiKey: apiKey || "missing",
-});
+export const gemini = new GoogleGenAI({ apiKey: apiKey || "missing" });
+
+export function pcmToWav(pcmBase64: string, sampleRate = 24000, channels = 1, bitsPerSample = 16): Buffer {
+  const pcm = Buffer.from(pcmBase64, "base64");
+  const byteRate = (sampleRate * channels * bitsPerSample) / 8;
+  const blockAlign = (channels * bitsPerSample) / 8;
+  const dataSize = pcm.length;
+  const header = Buffer.alloc(44);
+  header.write("RIFF", 0);
+  header.writeUInt32LE(36 + dataSize, 4);
+  header.write("WAVE", 8);
+  header.write("fmt ", 12);
+  header.writeUInt32LE(16, 16);
+  header.writeUInt16LE(1, 20);
+  header.writeUInt16LE(channels, 22);
+  header.writeUInt32LE(sampleRate, 24);
+  header.writeUInt32LE(byteRate, 28);
+  header.writeUInt16LE(blockAlign, 32);
+  header.writeUInt16LE(bitsPerSample, 34);
+  header.write("data", 36);
+  header.writeUInt32LE(dataSize, 40);
+  return Buffer.concat([header, pcm]);
+}

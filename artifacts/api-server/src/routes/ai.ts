@@ -1,9 +1,10 @@
 import { Router } from "express";
 import multer from "multer";
-import { db, bookingsTable, hotelsTable, agenciesTable, usersTable } from "@workspace/db";
+import { db, bookingsTable, hotelsTable, agenciesTable } from "@workspace/db";
 import { eq, and, between, sql, desc } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth.js";
-import { openai } from "../lib/openai.js";
+import { gemini, pcmToWav } from "../lib/openai.js";
+import { Type } from "@google/genai";
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
@@ -18,127 +19,100 @@ function effectiveHotelId(reqUser: any, requestedHotelId?: number) {
   return reqUser?.hotelId ?? undefined;
 }
 
-const tools: any[] = [
+const functionDeclarations: any[] = [
   {
-    type: "function",
-    function: {
-      name: "list_bookings",
-      description: "List hotel bookings with optional filters. Returns array of bookings with guest, room, dates, cost, status, agency.",
-      parameters: {
-        type: "object",
-        properties: {
-          date: { type: "string", description: "Filter by check-in date (YYYY-MM-DD)" },
-          month: { type: "integer", description: "Month (1-12)" },
-          year: { type: "integer", description: "Year e.g. 2026" },
-          status: { type: "string", enum: ["confirmed", "checked_in", "checked_out", "cancelled"] },
-          agencyId: { type: "integer" },
-          guestName: { type: "string", description: "Substring match on guest name" },
-          limit: { type: "integer", description: "Max results, default 50" },
-        },
+    name: "list_bookings",
+    description: "List hotel bookings with optional filters. Returns array of bookings with guest, room, dates, cost, status, agency.",
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        date: { type: Type.STRING, description: "Filter by check-in date (YYYY-MM-DD)" },
+        month: { type: Type.INTEGER, description: "Month (1-12)" },
+        year: { type: Type.INTEGER, description: "Year e.g. 2026" },
+        status: { type: Type.STRING, enum: ["confirmed", "checked_in", "checked_out", "cancelled"] },
+        agencyId: { type: Type.INTEGER },
+        guestName: { type: Type.STRING, description: "Substring match on guest name" },
+        limit: { type: Type.INTEGER, description: "Max results, default 50" },
       },
     },
   },
   {
-    type: "function",
-    function: {
-      name: "get_booking",
-      description: "Get a single booking by id with full details.",
-      parameters: { type: "object", properties: { id: { type: "integer" } }, required: ["id"] },
-    },
+    name: "get_booking",
+    description: "Get a single booking by id with full details.",
+    parameters: { type: Type.OBJECT, properties: { id: { type: Type.INTEGER } }, required: ["id"] },
   },
   {
-    type: "function",
-    function: {
-      name: "create_booking",
-      description: "Create a new hotel booking. Required: guestName, checkIn, checkOut, roomRent. Optional: guestEmail, guestPhone, roomNumber, roomType, addOns, receipt, notes, status, agencyId, hotelId (admin only).",
-      parameters: {
-        type: "object",
-        properties: {
-          guestName: { type: "string" },
-          guestEmail: { type: "string" },
-          guestPhone: { type: "string" },
-          roomNumber: { type: "string" },
-          roomType: { type: "string" },
-          checkIn: { type: "string", description: "YYYY-MM-DD" },
-          checkOut: { type: "string", description: "YYYY-MM-DD" },
-          roomRent: { type: "number" },
-          addOns: { type: "number" },
-          receipt: { type: "number" },
-          notes: { type: "string" },
-          status: { type: "string", enum: ["confirmed", "checked_in", "checked_out", "cancelled"] },
-          agencyId: { type: "integer" },
-          hotelId: { type: "integer" },
-        },
-        required: ["guestName", "checkIn", "checkOut", "roomRent"],
+    name: "create_booking",
+    description: "Create a new hotel booking. Required: guestName, checkIn (YYYY-MM-DD), checkOut (YYYY-MM-DD), roomRent.",
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        guestName: { type: Type.STRING },
+        guestEmail: { type: Type.STRING },
+        guestPhone: { type: Type.STRING },
+        roomNumber: { type: Type.STRING },
+        roomType: { type: Type.STRING },
+        checkIn: { type: Type.STRING, description: "YYYY-MM-DD" },
+        checkOut: { type: Type.STRING, description: "YYYY-MM-DD" },
+        roomRent: { type: Type.NUMBER },
+        addOns: { type: Type.NUMBER },
+        receipt: { type: Type.NUMBER },
+        notes: { type: Type.STRING },
+        status: { type: Type.STRING, enum: ["confirmed", "checked_in", "checked_out", "cancelled"] },
+        agencyId: { type: Type.INTEGER },
+        hotelId: { type: Type.INTEGER, description: "Admin only" },
       },
+      required: ["guestName", "checkIn", "checkOut", "roomRent"],
     },
   },
   {
-    type: "function",
-    function: {
-      name: "update_booking",
-      description: "Update an existing booking. Provide id and any fields to change.",
-      parameters: {
-        type: "object",
-        properties: {
-          id: { type: "integer" },
-          guestName: { type: "string" },
-          guestEmail: { type: "string" },
-          guestPhone: { type: "string" },
-          roomNumber: { type: "string" },
-          roomType: { type: "string" },
-          checkIn: { type: "string" },
-          checkOut: { type: "string" },
-          roomRent: { type: "number" },
-          addOns: { type: "number" },
-          receipt: { type: "number" },
-          notes: { type: "string" },
-          status: { type: "string", enum: ["confirmed", "checked_in", "checked_out", "cancelled"] },
-          agencyId: { type: "integer" },
-        },
-        required: ["id"],
+    name: "update_booking",
+    description: "Update an existing booking. Provide id and any fields to change.",
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        id: { type: Type.INTEGER },
+        guestName: { type: Type.STRING },
+        guestEmail: { type: Type.STRING },
+        guestPhone: { type: Type.STRING },
+        roomNumber: { type: Type.STRING },
+        roomType: { type: Type.STRING },
+        checkIn: { type: Type.STRING },
+        checkOut: { type: Type.STRING },
+        roomRent: { type: Type.NUMBER },
+        addOns: { type: Type.NUMBER },
+        receipt: { type: Type.NUMBER },
+        notes: { type: Type.STRING },
+        status: { type: Type.STRING, enum: ["confirmed", "checked_in", "checked_out", "cancelled"] },
+        agencyId: { type: Type.INTEGER },
       },
+      required: ["id"],
     },
   },
   {
-    type: "function",
-    function: {
-      name: "occupancy_on_date",
-      description: "Get occupied room count and total rooms for a specific date. Useful for 'how many rooms are occupied on X'.",
-      parameters: { type: "object", properties: { date: { type: "string", description: "YYYY-MM-DD" } }, required: ["date"] },
-    },
+    name: "occupancy_on_date",
+    description: "Get occupied room count and total rooms for a specific date.",
+    parameters: { type: Type.OBJECT, properties: { date: { type: Type.STRING, description: "YYYY-MM-DD" } }, required: ["date"] },
   },
   {
-    type: "function",
-    function: {
-      name: "dashboard_stats",
-      description: "Get current dashboard summary: today's check-ins, check-outs, occupancy, monthly revenue.",
-      parameters: { type: "object", properties: {} },
-    },
+    name: "dashboard_stats",
+    description: "Get current dashboard summary: today's check-ins, check-outs, occupancy, monthly revenue.",
+    parameters: { type: Type.OBJECT, properties: {} },
   },
   {
-    type: "function",
-    function: {
-      name: "revenue_summary",
-      description: "Get revenue summary by month for a year, plus revenue grouped by agency.",
-      parameters: { type: "object", properties: { year: { type: "integer" } } },
-    },
+    name: "revenue_summary",
+    description: "Get revenue summary by month for a year, plus revenue grouped by agency.",
+    parameters: { type: Type.OBJECT, properties: { year: { type: Type.INTEGER } } },
   },
   {
-    type: "function",
-    function: {
-      name: "list_agencies",
-      description: "List all agencies for the user's hotel.",
-      parameters: { type: "object", properties: {} },
-    },
+    name: "list_agencies",
+    description: "List all agencies for the user's hotel.",
+    parameters: { type: Type.OBJECT, properties: {} },
   },
   {
-    type: "function",
-    function: {
-      name: "list_hotels",
-      description: "List all hotels (admin only).",
-      parameters: { type: "object", properties: {} },
-    },
+    name: "list_hotels",
+    description: "List all hotels (admin only).",
+    parameters: { type: Type.OBJECT, properties: {} },
   },
 ];
 
@@ -328,7 +302,7 @@ router.post("/chat", requireAuth, async (req, res) => {
     const reqUser = req.user!;
     const today = new Date().toISOString().split("T")[0];
 
-    const systemPrompt = `You are a helpful AI assistant for a Hotel CRM platform. You can answer questions and perform tasks related to hotels, bookings, agencies, revenue and occupancy.
+    const systemInstruction = `You are a helpful AI assistant for a Hotel CRM platform. You can answer questions and perform tasks related to hotels, bookings, agencies, revenue and occupancy.
 
 CONTEXT:
 - Today's date: ${today}
@@ -351,43 +325,45 @@ GUIDELINES:
 - Format money as ₹X,XXX. Keep responses concise and friendly.
 - After performing an action (create/update), confirm what changed in one short sentence.`;
 
-    const chatMessages: any[] = [{ role: "system", content: systemPrompt }, ...messages];
-
-    let response = await openai.chat.completions.create({
-      model: "gpt-5.2",
-      messages: chatMessages,
-      tools,
-      tool_choice: "auto",
-      max_completion_tokens: 4096,
-    });
+    const contents: any[] = messages.map((m) => ({
+      role: m.role === "assistant" ? "model" : "user",
+      parts: [{ text: m.content }],
+    }));
 
     let safety = 0;
-    while (response.choices[0]?.message?.tool_calls?.length && safety < 6) {
+    let finalText = "";
+    while (safety < 6) {
       safety++;
-      const msg = response.choices[0].message;
-      chatMessages.push(msg);
-      for (const call of msg.tool_calls!) {
-        if (call.type !== "function") continue;
-        let parsedArgs: any = {};
-        try { parsedArgs = JSON.parse(call.function.arguments || "{}"); } catch {}
-        const result = await executeTool(call.function.name, parsedArgs, reqUser);
-        chatMessages.push({
-          role: "tool",
-          tool_call_id: call.id,
-          content: JSON.stringify(result).slice(0, 8000),
+      const response: any = await gemini.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents,
+        config: {
+          systemInstruction,
+          tools: [{ functionDeclarations }],
+        },
+      });
+
+      const candidate = response.candidates?.[0];
+      const parts = candidate?.content?.parts ?? [];
+      const functionCalls = parts.filter((p: any) => p.functionCall).map((p: any) => p.functionCall);
+
+      if (functionCalls.length === 0) {
+        finalText = response.text ?? parts.filter((p: any) => p.text).map((p: any) => p.text).join("\n") ?? "";
+        break;
+      }
+
+      contents.push({ role: "model", parts });
+      const responseParts: any[] = [];
+      for (const fc of functionCalls) {
+        const result = await executeTool(fc.name, fc.args || {}, reqUser);
+        responseParts.push({
+          functionResponse: { name: fc.name, response: { result } },
         });
       }
-      response = await openai.chat.completions.create({
-        model: "gpt-5.2",
-        messages: chatMessages,
-        tools,
-        tool_choice: "auto",
-        max_completion_tokens: 4096,
-      });
+      contents.push({ role: "user", parts: responseParts });
     }
 
-    const reply = response.choices[0]?.message?.content ?? "Sorry, I couldn't generate a response.";
-    res.json({ reply });
+    res.json({ reply: finalText || "Sorry, I couldn't generate a response." });
   } catch (e: any) {
     console.error("[ai/chat]", e);
     res.status(500).json({ error: "AI error", message: e?.message ?? String(e) });
@@ -396,21 +372,27 @@ GUIDELINES:
 
 router.post("/tts", requireAuth, async (req, res) => {
   try {
-    const { text, voice = "alloy" } = req.body as { text: string; voice?: string };
+    const { text, voice = "Kore" } = req.body as { text: string; voice?: string };
     if (!text || typeof text !== "string") {
       res.status(400).json({ error: "text is required" });
       return;
     }
-    const out = await openai.audio.speech.create({
-      model: "gpt-4o-mini-tts",
-      voice,
-      input: text.slice(0, 4000),
-      response_format: "mp3",
+    const response: any = await gemini.models.generateContent({
+      model: "gemini-2.5-flash-preview-tts",
+      contents: [{ parts: [{ text: text.slice(0, 4000) }] }],
+      config: {
+        responseModalities: ["AUDIO"],
+        speechConfig: {
+          voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } },
+        },
+      },
     });
-    const buf = Buffer.from(await out.arrayBuffer());
-    res.setHeader("Content-Type", "audio/mpeg");
-    res.setHeader("Content-Length", String(buf.length));
-    res.send(buf);
+    const inline = response.candidates?.[0]?.content?.parts?.find((p: any) => p.inlineData)?.inlineData;
+    if (!inline?.data) throw new Error("No audio returned");
+    const wav = pcmToWav(inline.data);
+    res.setHeader("Content-Type", "audio/wav");
+    res.setHeader("Content-Length", String(wav.length));
+    res.send(wav);
   } catch (e: any) {
     console.error("[ai/tts]", e);
     res.status(500).json({ error: "TTS error", message: e?.message ?? String(e) });
@@ -423,13 +405,19 @@ router.post("/stt", requireAuth, upload.single("audio"), async (req: any, res) =
       res.status(400).json({ error: "audio file required" });
       return;
     }
-    const filename = req.file.originalname || "audio.webm";
-    const file = new File([req.file.buffer], filename, { type: req.file.mimetype || "audio/webm" });
-    const result = await openai.audio.transcriptions.create({
-      file,
-      model: "gpt-4o-mini-transcribe",
+    const mimeType = req.file.mimetype || "audio/webm";
+    const data = req.file.buffer.toString("base64");
+    const response: any = await gemini.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: [{
+        parts: [
+          { text: "Transcribe this audio. Return ONLY the spoken text — no explanations, no quotes, no formatting. Preserve the original language (Hindi in Devanagari, English, etc.)." },
+          { inlineData: { mimeType, data } },
+        ],
+      }],
     });
-    res.json({ text: result.text });
+    const text = (response.text ?? "").trim();
+    res.json({ text });
   } catch (e: any) {
     console.error("[ai/stt]", e);
     res.status(500).json({ error: "STT error", message: e?.message ?? String(e) });
