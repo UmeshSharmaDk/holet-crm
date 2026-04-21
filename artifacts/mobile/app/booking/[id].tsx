@@ -5,6 +5,7 @@ import {
   ActivityIndicator,
   Alert,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -52,7 +53,7 @@ export default function BookingDetailScreen() {
   const insets = useSafeAreaInsets();
   const qc = useQueryClient();
 
-  const { data: booking, isLoading } = useQuery<Booking>({
+  const { data: booking, isLoading, refetch, isFetching } = useQuery<Booking>({
     queryKey: ["booking", id],
     queryFn: () => api.get<Booking>(`/bookings/${id}`),
     enabled: !!id,
@@ -117,6 +118,7 @@ export default function BookingDetailScreen() {
       <ScrollView
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}
         showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={isFetching} onRefresh={refetch} tintColor={C.accent} />}
       >
         <View style={styles.guestCard}>
           <View style={styles.guestAvatar}>

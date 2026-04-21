@@ -6,6 +6,7 @@ import {
   Dimensions,
   Platform,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -88,6 +89,13 @@ export default function AnalyticsScreen() {
       style={styles.container}
       contentContainerStyle={[styles.content, { paddingTop: topInset + 8, paddingBottom: insets.bottom + 100 }]}
       showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl
+          refreshing={occupancyQuery.isFetching || revenueQuery.isFetching}
+          onRefresh={() => { occupancyQuery.refetch(); revenueQuery.refetch(); }}
+          tintColor={C.accent}
+        />
+      }
     >
       <Text style={styles.title}>Analytics</Text>
       <Text style={styles.subtitle}>{MONTHS_SHORT[month - 1]} {year} • {year} Year</Text>

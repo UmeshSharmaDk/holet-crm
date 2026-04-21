@@ -5,6 +5,7 @@ import {
   ActivityIndicator,
   FlatList,
   Pressable,
+  RefreshControl,
   StyleSheet,
   Text,
   View,
@@ -41,7 +42,7 @@ export default function AgencyBookingsScreen() {
   const insets = useSafeAreaInsets();
   const agencyName = name || "Agency";
 
-  const { data: bookings, isLoading } = useQuery<Booking[]>({
+  const { data: bookings, isLoading, refetch, isFetching } = useQuery<Booking[]>({
     queryKey: ["agency-bookings", id],
     queryFn: () => api.get<Booking[]>(`/bookings?agencyId=${id}`),
     enabled: !!id,
@@ -100,6 +101,7 @@ export default function AgencyBookingsScreen() {
           keyExtractor={(b) => String(b.id)}
           contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: insets.bottom + 24 }}
           renderItem={({ item }) => <BookingCard booking={item} />}
+          refreshControl={<RefreshControl refreshing={isFetching} onRefresh={refetch} tintColor={C.accent} />}
         />
       )}
     </View>
