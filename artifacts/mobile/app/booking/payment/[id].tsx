@@ -1,6 +1,6 @@
 import { Feather } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -40,8 +40,11 @@ export default function PaymentScreen() {
     queryKey: ["booking", id],
     queryFn: () => api.get<Booking>(`/bookings/${id}`),
     enabled: !!id,
-    onSuccess: (b) => setAmount(String(b.receipt)),
-  } as any);
+  });
+
+  useEffect(() => {
+    if (booking) setAmount(String(booking.receipt));
+  }, [booking?.id]);
 
   const mutation = useMutation({
     mutationFn: (receipt: number) => api.patch(`/bookings/${id}/payment`, { receipt }),
@@ -110,7 +113,7 @@ export default function PaymentScreen() {
             <View style={styles.balanceCard}>
               <Text style={styles.balanceLabel}>New Balance Due</Text>
               <Text style={[styles.balanceValue, { color: newBalance > 0 ? C.danger : C.success }]}>
-                ${newBalance.toFixed(2)}
+                ₹{newBalance.toFixed(2)}
               </Text>
               {newBalance <= 0 && (
                 <View style={styles.paidBadge}>

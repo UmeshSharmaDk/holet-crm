@@ -237,7 +237,7 @@ function BookingRow({ booking, type }: { booking: Booking; type: "checkin" | "ch
       </View>
       <View style={styles.bookingRight}>
         {booking.balance > 0 && (
-          <Text style={styles.balanceDue}>-${booking.balance.toFixed(0)} due</Text>
+          <Text style={styles.balanceDue}>-₹{booking.balance.toFixed(0)} due</Text>
         )}
         <Feather name="chevron-right" size={16} color={C.textSecondary} />
       </View>
