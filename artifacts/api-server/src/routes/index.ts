@@ -7,6 +7,7 @@ import agenciesRouter from "./agencies.js";
 import bookingsRouter from "./bookings.js";
 import dashboardRouter from "./dashboard.js";
 import analyticsRouter from "./analytics.js";
+import aiRouter from "./ai.js";
 
 const router = Router();
 
@@ -18,5 +19,6 @@ router.use("/agencies", agenciesRouter);
 router.use("/bookings", bookingsRouter);
 router.use("/dashboard", dashboardRouter);
 router.use("/analytics", analyticsRouter);
+router.use("/ai", aiRouter);
 
 export default router;

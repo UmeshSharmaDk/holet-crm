@@ -57,6 +57,8 @@
   },
   "dependencies": {
     "@react-native-community/datetimepicker": "^8.6.0",
+    "expo-av": "^16.0.8",
+    "expo-file-system": "^55.0.16",
     "react-native-chart-kit": "^6.12.0"
   }
 }
