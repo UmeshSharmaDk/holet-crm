@@ -154,22 +154,22 @@ export default function NewBookingScreen() {
         <SectionHeader title="Financials" />
         <View style={styles.row2}>
           <View style={{ flex: 1 }}>
-            <FormField label="Room Rent ($) *" value={form.roomRent} onChangeText={(v) => update("roomRent", v)} placeholder="0.00" keyboardType="numeric" />
+            <FormField label="Room Rent (₹) *" value={form.roomRent} onChangeText={(v) => update("roomRent", v)} placeholder="0.00" keyboardType="numeric" />
           </View>
           <View style={{ flex: 1 }}>
-            <FormField label="Add-ons ($)" value={form.addOns} onChangeText={(v) => update("addOns", v)} placeholder="0.00" keyboardType="numeric" />
+            <FormField label="Add-ons (₹)" value={form.addOns} onChangeText={(v) => update("addOns", v)} placeholder="0.00" keyboardType="numeric" />
           </View>
         </View>
-        <FormField label="Receipt ($)" value={form.receipt} onChangeText={(v) => update("receipt", v)} placeholder="0.00" keyboardType="numeric" />
+        <FormField label="Receipt (₹)" value={form.receipt} onChangeText={(v) => update("receipt", v)} placeholder="0.00" keyboardType="numeric" />
 
         <View style={styles.calcCard}>
           <View style={styles.calcRow}>
             <Text style={styles.calcLabel}>Total Cost</Text>
-            <Text style={styles.calcValue}>${totalCost.toFixed(2)}</Text>
+            <Text style={styles.calcValue}>₹{totalCost.toFixed(2)}</Text>
           </View>
           <View style={styles.calcRow}>
             <Text style={styles.calcLabel}>Balance Due</Text>
-            <Text style={[styles.calcValue, { color: balance > 0 ? C.danger : C.success }]}>${balance.toFixed(2)}</Text>
+            <Text style={[styles.calcValue, { color: balance > 0 ? C.danger : C.success }]}>₹{balance.toFixed(2)}</Text>
           </View>
         </View>
 

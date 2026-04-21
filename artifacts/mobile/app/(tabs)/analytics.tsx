@@ -137,7 +137,7 @@ export default function AnalyticsScreen() {
           </Section>
 
           <Section title={`${year} Monthly Revenue`} icon="trending-up">
-            <Text style={styles.totalRevenue}>${(rev?.totalYearlyRevenue ?? 0).toLocaleString()}</Text>
+            <Text style={styles.totalRevenue}>₹{(rev?.totalYearlyRevenue ?? 0).toLocaleString()}</Text>
             <Text style={styles.totalRevLabel}>Total {year} Revenue</Text>
             {barData.labels.length > 0 ? (
               <ScrollView horizontal showsHorizontalScrollIndicator={false}>
@@ -149,7 +149,7 @@ export default function AnalyticsScreen() {
                   style={{ borderRadius: 12 }}
                   fromZero
                   showValuesOnTopOfBars
-                  yAxisLabel="$"
+                  yAxisLabel="₹"
                   yAxisSuffix=""
                 />
               </ScrollView>
@@ -206,7 +206,7 @@ function AgencyRow({ agency, color, total }: { agency: AgencyRevenue; color: str
       <View style={{ flex: 1 }}>
         <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 4 }}>
           <Text style={styles.agencyName}>{agency.agencyName}</Text>
-          <Text style={styles.agencyRevenue}>${agency.revenue.toLocaleString()}</Text>
+          <Text style={styles.agencyRevenue}>₹{agency.revenue.toLocaleString()}</Text>
         </View>
         <View style={styles.agencyBarBg}>
           <View style={[styles.agencyBarFill, { width: `${pct}%`, backgroundColor: color }]} />

@@ -79,20 +79,20 @@ export default function PaymentScreen() {
               <Text style={styles.guestName}>{booking?.guestName}</Text>
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>Room Rent</Text>
-                <Text style={styles.summaryValue}>${booking?.roomRent.toFixed(2)}</Text>
+                <Text style={styles.summaryValue}>₹{booking?.roomRent.toFixed(2)}</Text>
               </View>
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>Add-ons</Text>
-                <Text style={styles.summaryValue}>${booking?.addOns.toFixed(2)}</Text>
+                <Text style={styles.summaryValue}>₹{booking?.addOns.toFixed(2)}</Text>
               </View>
               <View style={styles.divider} />
               <View style={styles.summaryRow}>
                 <Text style={[styles.summaryLabel, { fontFamily: "Inter_700Bold", color: C.text }]}>Total Cost</Text>
-                <Text style={[styles.summaryValue, { fontFamily: "Inter_700Bold", color: C.text }]}>${booking?.totalCost.toFixed(2)}</Text>
+                <Text style={[styles.summaryValue, { fontFamily: "Inter_700Bold", color: C.text }]}>₹{booking?.totalCost.toFixed(2)}</Text>
               </View>
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>Current Receipt</Text>
-                <Text style={[styles.summaryValue, { color: C.success }]}>${booking?.receipt.toFixed(2)}</Text>
+                <Text style={[styles.summaryValue, { color: C.success }]}>₹{booking?.receipt.toFixed(2)}</Text>
               </View>
             </View>
 

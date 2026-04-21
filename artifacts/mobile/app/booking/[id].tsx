@@ -163,14 +163,14 @@ export default function BookingDetailScreen() {
 
         <View style={styles.financialCard}>
           <Text style={styles.financialTitle}>Financial Summary</Text>
-          <FinRow label="Room Rent" value={`$${booking.roomRent.toFixed(2)}`} />
-          <FinRow label="Add-ons" value={`$${booking.addOns.toFixed(2)}`} />
+          <FinRow label="Room Rent" value={`₹${booking.roomRent.toFixed(2)}`} />
+          <FinRow label="Add-ons" value={`₹${booking.addOns.toFixed(2)}`} />
           <View style={styles.divider} />
-          <FinRow label="Total Cost" value={`$${booking.totalCost.toFixed(2)}`} bold />
-          <FinRow label="Receipt" value={`$${booking.receipt.toFixed(2)}`} color={C.success} />
+          <FinRow label="Total Cost" value={`₹${booking.totalCost.toFixed(2)}`} bold />
+          <FinRow label="Receipt" value={`₹${booking.receipt.toFixed(2)}`} color={C.success} />
           <FinRow
             label="Balance Due"
-            value={`$${booking.balance.toFixed(2)}`}
+            value={`₹${booking.balance.toFixed(2)}`}
             color={booking.balance > 0 ? C.danger : C.success}
             bold
           />

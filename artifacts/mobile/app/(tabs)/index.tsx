@@ -143,7 +143,7 @@ export default function DashboardScreen() {
               iconColor={C.success}
               iconBg={C.successLight}
               label="Monthly Revenue"
-              value={`$${(statsQuery.data?.monthlyRevenue ?? 0).toLocaleString()}`}
+              value={`₹${(statsQuery.data?.monthlyRevenue ?? 0).toLocaleString()}`}
             />
           </View>
 

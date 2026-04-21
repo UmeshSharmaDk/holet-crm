@@ -206,11 +206,11 @@ function BookingCard({ booking }: { booking: Booking }) {
       <View style={styles.cardFinancials}>
         <View>
           <Text style={styles.totalLabel}>Total</Text>
-          <Text style={styles.totalValue}>${booking.totalCost.toFixed(2)}</Text>
+          <Text style={styles.totalValue}>₹{booking.totalCost.toFixed(2)}</Text>
         </View>
         {booking.balance > 0 ? (
           <View style={styles.balancePill}>
-            <Text style={styles.balanceText}>Balance: ${booking.balance.toFixed(2)}</Text>
+            <Text style={styles.balanceText}>Balance: ₹{booking.balance.toFixed(2)}</Text>
           </View>
         ) : (
           <View style={styles.paidPill}>
