@@ -1,9 +1,11 @@
 import { Feather } from "@expo/vector-icons";
+import { router } from "expo-router";
 import React, { useState } from "react";
 import {
   ActivityIndicator,
   Dimensions,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -200,8 +202,12 @@ function MiniStat({ label, value, unit, color }: { label: string; value: string;
 
 function AgencyRow({ agency, color, total }: { agency: AgencyRevenue; color: string; total: number }) {
   const pct = total > 0 ? Math.round((agency.revenue / total) * 100) : 0;
+  const aid = agency.agencyId ?? "direct";
   return (
-    <View style={styles.agencyRow}>
+    <Pressable
+      style={({ pressed }) => [styles.agencyRow, pressed && { opacity: 0.7 }]}
+      onPress={() => router.push(`/agency/${aid}/bookings?name=${encodeURIComponent(agency.agencyName)}` as any)}
+    >
       <View style={[styles.agencyDot, { backgroundColor: color }]} />
       <View style={{ flex: 1 }}>
         <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 4 }}>
@@ -213,7 +219,8 @@ function AgencyRow({ agency, color, total }: { agency: AgencyRevenue; color: str
         </View>
         <Text style={styles.agencyBookings}>{agency.bookings} bookings • {pct}%</Text>
       </View>
-    </View>
+      <Feather name="chevron-right" size={18} color={C.textSecondary} style={{ marginTop: 4 }} />
+    </Pressable>
   );
 }
 

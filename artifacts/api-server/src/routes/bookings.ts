@@ -37,13 +37,21 @@ async function enrichBooking(booking: any) {
 
 router.get("/", requireAuth, async (req, res) => {
   try {
-    const { month, year, hotelId: queryHotelId, date } = req.query;
+    const { month, year, hotelId: queryHotelId, date, agencyId } = req.query;
     const effectiveHotelId = req.user?.role === "admin"
       ? queryHotelId ? parseInt(queryHotelId as string) : undefined
       : req.user?.hotelId ?? undefined;
 
     const conditions: any[] = [];
     if (effectiveHotelId) conditions.push(eq(bookingsTable.hotelId, effectiveHotelId));
+    if (agencyId !== undefined) {
+      const aid = agencyId as string;
+      if (aid === "null" || aid === "direct" || aid === "") {
+        conditions.push(sql`${bookingsTable.agencyId} IS NULL`);
+      } else {
+        conditions.push(eq(bookingsTable.agencyId, parseInt(aid)));
+      }
+    }
 
     if (date) {
       conditions.push(eq(bookingsTable.checkIn, date as string));
