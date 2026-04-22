@@ -41,7 +41,12 @@ router.get("/stats", requireAuth, async (req, res) => {
     const [occupiedResult] = await db
       .select({ total: sql<number>`coalesce(sum(${bookingsTable.numberOfRooms}), 0)` })
       .from(bookingsTable)
-      .where(and(hotelCondition as any, eq(bookingsTable.status, "checked_in")));
+      .where(and(
+        hotelCondition as any,
+        sql`${bookingsTable.checkIn} <= ${today}`,
+        sql`${bookingsTable.checkOut} > ${today}`,
+        sql`${bookingsTable.status} IN ('confirmed', 'checked_in')`
+      ));
 
     let totalRooms = 0;
     if (effectiveHotelId) {

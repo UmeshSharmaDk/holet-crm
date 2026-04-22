@@ -16,42 +16,58 @@ router.get("/occupancy", requireAuth, async (req, res) => {
     const m = month ? parseInt(month as string) : now.getMonth() + 1;
     const y = year ? parseInt(year as string) : now.getFullYear();
 
+    const daysInMonth = new Date(y, m, 0).getDate();
+    const firstDay = `${y}-${String(m).padStart(2, "0")}-01`;
+    const nextMonth = m === 12
+      ? `${y + 1}-01-01`
+      : `${y}-${String(m + 1).padStart(2, "0")}-01`;
+
     let totalRooms = 0;
     if (effectiveHotelId) {
       const [hotel] = await db.select().from(hotelsTable).where(eq(hotelsTable.id, effectiveHotelId));
       totalRooms = hotel?.totalRooms ?? 0;
     } else {
-      const [r] = await db.select({ total: sql<number>`sum(${hotelsTable.totalRooms})` }).from(hotelsTable);
+      const [r] = await db.select({ total: sql<number>`coalesce(sum(${hotelsTable.totalRooms}), 0)` }).from(hotelsTable);
       totalRooms = Number(r?.total ?? 0);
     }
 
-    const daysInMonth = new Date(y, m, 0).getDate();
-    const dailyOccupancy = [];
-    let totalOccupied = 0;
+    const conditions: any[] = [
+      sql`${bookingsTable.checkIn} < ${nextMonth}`,
+      sql`${bookingsTable.checkOut} > ${firstDay}`,
+      sql`${bookingsTable.status} IN ('confirmed', 'checked_in')`,
+    ];
+    if (effectiveHotelId) conditions.push(eq(bookingsTable.hotelId, effectiveHotelId));
 
-    for (let day = 1; day <= daysInMonth; day++) {
-      const dateStr = `${y}-${String(m).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-      const conditions: any[] = [
-        sql`${bookingsTable.checkIn} <= ${dateStr}`,
-        sql`${bookingsTable.checkOut} > ${dateStr}`,
-        sql`${bookingsTable.status} IN ('confirmed', 'checked_in')`,
-      ];
-      if (effectiveHotelId) conditions.push(eq(bookingsTable.hotelId, effectiveHotelId));
+    const [aggregate] = await db
+      .select({
+        roomNights: sql<number>`coalesce(sum(
+          ${bookingsTable.numberOfRooms} *
+          (LEAST(cast(${bookingsTable.checkOut} as date), cast(${nextMonth} as date)) -
+           GREATEST(cast(${bookingsTable.checkIn} as date), cast(${firstDay} as date)))
+        ), 0)`,
+        bookingsCount: sql<number>`count(*)`,
+        totalRoomsBooked: sql<number>`coalesce(sum(${bookingsTable.numberOfRooms}), 0)`,
+        totalPersons: sql<number>`coalesce(sum(${bookingsTable.numberOfPersons}), 0)`,
+      })
+      .from(bookingsTable)
+      .where(and(...conditions));
 
-      const [result] = await db
-        .select({ total: sql<number>`coalesce(sum(${bookingsTable.numberOfRooms}), 0)` })
-        .from(bookingsTable)
-        .where(and(...conditions));
-      const occupied = Number(result?.total ?? 0);
-      totalOccupied += occupied;
-      const percentage = totalRooms > 0 ? Math.round((occupied / totalRooms) * 100) : 0;
-      dailyOccupancy.push({ date: dateStr, occupiedRooms: occupied, totalRooms, percentage });
-    }
+    const roomNights = Number(aggregate?.roomNights ?? 0);
+    const capacity = totalRooms * daysInMonth;
+    const averageOccupiedRooms = daysInMonth > 0 ? roomNights / daysInMonth : 0;
+    const occupancyPercentage = capacity > 0 ? Math.round((roomNights / capacity) * 100) : 0;
 
     res.json({
-      dailyOccupancy,
-      averageOccupancy: daysInMonth > 0 ? Math.round(totalOccupied / daysInMonth) : 0,
+      month: m,
+      year: y,
+      daysInMonth,
       totalRooms,
+      roomNights,
+      averageOccupiedRooms: Math.round(averageOccupiedRooms * 10) / 10,
+      occupancyPercentage,
+      bookingsCount: Number(aggregate?.bookingsCount ?? 0),
+      totalRoomsBooked: Number(aggregate?.totalRoomsBooked ?? 0),
+      totalPersons: Number(aggregate?.totalPersons ?? 0),
     });
   } catch (error) {
     console.error(error);

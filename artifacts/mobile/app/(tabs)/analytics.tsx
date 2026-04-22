@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import {
   ActivityIndicator,
   Dimensions,
+  Modal,
   Platform,
   Pressable,
   RefreshControl,
@@ -24,8 +25,18 @@ const { width: SCREEN_W } = Dimensions.get("window");
 const CHART_W = Math.min(SCREEN_W - 40, 400);
 const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-interface OccupancyDay { date: string; occupiedRooms: number; totalRooms: number; percentage: number; }
-interface OccupancyStats { dailyOccupancy: OccupancyDay[]; averageOccupancy: number; totalRooms: number; }
+interface OccupancyStats {
+  month: number;
+  year: number;
+  daysInMonth: number;
+  totalRooms: number;
+  roomNights: number;
+  averageOccupiedRooms: number;
+  occupancyPercentage: number;
+  bookingsCount: number;
+  totalRoomsBooked: number;
+  totalPersons: number;
+}
 interface MonthRevenue { month: number; year: number; revenue: number; bookings: number; }
 interface AgencyRevenue { agencyId: number | null; agencyName: string; revenue: number; bookings: number; }
 interface RevenueStats { monthlyRevenue: MonthRevenue[]; agencyRevenue: AgencyRevenue[]; totalYearlyRevenue: number; }
@@ -36,8 +47,9 @@ export default function AnalyticsScreen() {
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
   const now = new Date();
-  const [month] = useState(now.getMonth() + 1);
-  const [year] = useState(now.getFullYear());
+  const [month, setMonth] = useState(now.getMonth() + 1);
+  const [year, setYear] = useState(now.getFullYear());
+  const [showMonthPicker, setShowMonthPicker] = useState(false);
 
   const hotelParam = user?.role !== "admin" && user?.hotelId ? `&hotelId=${user.hotelId}` : "";
 
@@ -57,14 +69,12 @@ export default function AnalyticsScreen() {
   const occ = occupancyQuery.data;
   const rev = revenueQuery.data;
 
-  const occupiedPct = occ?.averageOccupancy && occ.totalRooms > 0
-    ? Math.round((occ.averageOccupancy / occ.totalRooms) * 100)
-    : 0;
-  const vacantPct = 100 - occupiedPct;
+  const occupiedPct = occ?.occupancyPercentage ?? 0;
+  const vacantPct = Math.max(0, 100 - occupiedPct);
 
   const pieData = [
-    { name: "Occupied", population: occupiedPct, color: C.accent, legendFontColor: C.text, legendFontSize: 13 },
-    { name: "Vacant", population: vacantPct, color: C.border, legendFontColor: C.textSecondary, legendFontSize: 13 },
+    { name: "Occupied", population: Math.max(occupiedPct, 0.01), color: C.accent, legendFontColor: C.text, legendFontSize: 13 },
+    { name: "Vacant", population: Math.max(vacantPct, 0.01), color: C.border, legendFontColor: C.textSecondary, legendFontSize: 13 },
   ];
 
   const barData = {
@@ -98,17 +108,29 @@ export default function AnalyticsScreen() {
       }
     >
       <Text style={styles.title}>Analytics</Text>
-      <Text style={styles.subtitle}>{MONTHS_SHORT[month - 1]} {year} • {year} Year</Text>
+
+      <View style={styles.filterRow}>
+        <Pressable onPress={() => setShowMonthPicker(true)} style={styles.monthPill}>
+          <Feather name="calendar" size={14} color={C.accent} />
+          <Text style={styles.monthText}>{MONTHS_SHORT[month - 1]} {year}</Text>
+          <Feather name="chevron-down" size={14} color={C.accent} />
+        </Pressable>
+      </View>
 
       {isLoading ? (
         <View style={styles.centered}><ActivityIndicator size="large" color={C.accent} /></View>
       ) : (
         <>
-          <Section title="Monthly Occupancy" icon="percent">
+          <Section title={`${MONTHS_SHORT[month - 1]} ${year} Occupancy`} icon="percent">
             <View style={styles.statsRow}>
-              <MiniStat label="Average Occupied" value={String(occ?.averageOccupancy ?? 0)} unit="rooms" />
-              <MiniStat label="Total Rooms" value={String(occ?.totalRooms ?? 0)} unit="total" />
-              <MiniStat label="Occupancy Rate" value={`${occupiedPct}%`} unit="avg" color={occupiedPct >= 80 ? C.danger : occupiedPct >= 60 ? C.warning : C.success} />
+              <MiniStat label="Occupancy" value={`${occupiedPct}%`} unit="avg" color={occupiedPct >= 80 ? C.danger : occupiedPct >= 60 ? C.warning : C.success} />
+              <MiniStat label="Avg Rooms / Day" value={String(occ?.averageOccupiedRooms ?? 0)} unit={`of ${occ?.totalRooms ?? 0}`} />
+              <MiniStat label="Bookings" value={String(occ?.bookingsCount ?? 0)} unit="this month" />
+            </View>
+            <View style={styles.statsRow}>
+              <MiniStat label="Room-nights" value={String(occ?.roomNights ?? 0)} unit="sold" />
+              <MiniStat label="Rooms Booked" value={String(occ?.totalRoomsBooked ?? 0)} unit="total" />
+              <MiniStat label="Persons" value={String(occ?.totalPersons ?? 0)} unit="hosted" />
             </View>
             <View style={styles.chartBox}>
               <PieChart
@@ -122,28 +144,6 @@ export default function AnalyticsScreen() {
                 absolute={false}
               />
             </View>
-          </Section>
-
-          <Section title="Daily Occupancy (This Month)" icon="bar-chart-2">
-            {occ && occ.dailyOccupancy.length > 0 ? (
-              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                <View style={styles.dailyGrid}>
-                  {occ.dailyOccupancy.slice(0, 20).map((d) => {
-                    const day = new Date(d.date + "T00:00:00").getDate();
-                    const h = Math.max(4, Math.round((d.percentage / 100) * 60));
-                    return (
-                      <View key={d.date} style={styles.dayCol}>
-                        <Text style={styles.dayPct}>{d.percentage}%</Text>
-                        <View style={styles.barWrap}>
-                          <View style={[styles.bar, { height: h, backgroundColor: d.percentage >= 80 ? C.danger : d.percentage >= 60 ? C.warning : C.accent }]} />
-                        </View>
-                        <Text style={styles.dayLabel}>{day}</Text>
-                      </View>
-                    );
-                  })}
-                </View>
-              </ScrollView>
-            ) : <EmptyChart />}
           </Section>
 
           <Section title={`${year} Monthly Revenue`} icon="trending-up">
@@ -182,6 +182,39 @@ export default function AnalyticsScreen() {
           </Section>
         </>
       )}
+
+      <Modal visible={showMonthPicker} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Select Month</Text>
+              <Pressable onPress={() => setShowMonthPicker(false)}>
+                <Feather name="x" size={22} color={C.text} />
+              </Pressable>
+            </View>
+            <View style={styles.yearRow}>
+              <Pressable onPress={() => setYear((y) => y - 1)}>
+                <Feather name="chevron-left" size={24} color={C.text} />
+              </Pressable>
+              <Text style={styles.yearText}>{year}</Text>
+              <Pressable onPress={() => setYear((y) => y + 1)}>
+                <Feather name="chevron-right" size={24} color={C.text} />
+              </Pressable>
+            </View>
+            <View style={styles.monthGrid}>
+              {MONTHS_SHORT.map((m, i) => (
+                <Pressable
+                  key={m}
+                  style={[styles.monthCell, month === i + 1 && styles.monthCellActive]}
+                  onPress={() => { setMonth(i + 1); setShowMonthPicker(false); }}
+                >
+                  <Text style={[styles.monthCellText, month === i + 1 && styles.monthCellTextActive]}>{m}</Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -245,23 +278,19 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: C.background },
   content: { paddingHorizontal: 20 },
   title: { fontFamily: "Inter_700Bold", fontSize: 28, color: C.text, letterSpacing: -0.5 },
-  subtitle: { fontFamily: "Inter_400Regular", fontSize: 13, color: C.textSecondary, marginTop: 4, marginBottom: 20 },
+  filterRow: { flexDirection: "row", marginTop: 8, marginBottom: 16 },
+  monthPill: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: C.accentLight, alignSelf: "flex-start", borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8 },
+  monthText: { fontFamily: "Inter_600SemiBold", fontSize: 14, color: C.accent },
   centered: { flex: 1, justifyContent: "center", alignItems: "center", minHeight: 300 },
   section: { backgroundColor: C.surface, borderRadius: 16, padding: 16, marginBottom: 16, shadowColor: C.shadow, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 1, shadowRadius: 8, elevation: 2 },
   sectionHeader: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 16 },
   sectionTitle: { fontFamily: "Inter_700Bold", fontSize: 16, color: C.text },
-  statsRow: { flexDirection: "row", gap: 8, marginBottom: 16 },
+  statsRow: { flexDirection: "row", gap: 8, marginBottom: 12 },
   miniStat: { flex: 1, backgroundColor: C.surfaceSecondary, borderRadius: 10, padding: 12, alignItems: "center" },
   miniStatValue: { fontFamily: "Inter_700Bold", fontSize: 20, color: C.accent },
   miniStatUnit: { fontFamily: "Inter_400Regular", fontSize: 10, color: C.textSecondary },
   miniStatLabel: { fontFamily: "Inter_400Regular", fontSize: 10, color: C.textSecondary, textAlign: "center", marginTop: 2 },
   chartBox: { alignItems: "center" },
-  dailyGrid: { flexDirection: "row", alignItems: "flex-end", gap: 6, paddingVertical: 8 },
-  dayCol: { alignItems: "center", width: 32 },
-  dayPct: { fontFamily: "Inter_400Regular", fontSize: 9, color: C.textSecondary, marginBottom: 4 },
-  barWrap: { height: 60, justifyContent: "flex-end" },
-  bar: { width: 16, borderRadius: 4 },
-  dayLabel: { fontFamily: "Inter_400Regular", fontSize: 10, color: C.textSecondary, marginTop: 4 },
   totalRevenue: { fontFamily: "Inter_700Bold", fontSize: 32, color: C.text, letterSpacing: -1, marginBottom: 2 },
   totalRevLabel: { fontFamily: "Inter_400Regular", fontSize: 13, color: C.textSecondary, marginBottom: 16 },
   agencyRow: { flexDirection: "row", alignItems: "flex-start", gap: 10, marginBottom: 14 },
@@ -273,4 +302,15 @@ const styles = StyleSheet.create({
   agencyBookings: { fontFamily: "Inter_400Regular", fontSize: 11, color: C.textSecondary },
   emptyChart: { alignItems: "center", padding: 32, gap: 8 },
   emptyChartText: { fontFamily: "Inter_400Regular", fontSize: 13, color: C.textSecondary },
+  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
+  modalContent: { backgroundColor: C.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24 },
+  modalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 20 },
+  modalTitle: { fontFamily: "Inter_700Bold", fontSize: 20, color: C.text },
+  yearRow: { flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 24, marginBottom: 20 },
+  yearText: { fontFamily: "Inter_700Bold", fontSize: 22, color: C.text },
+  monthGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  monthCell: { width: "22%", padding: 12, borderRadius: 12, alignItems: "center", backgroundColor: C.surfaceSecondary },
+  monthCellActive: { backgroundColor: C.primary },
+  monthCellText: { fontFamily: "Inter_500Medium", fontSize: 14, color: C.text },
+  monthCellTextActive: { color: "#fff" },
 });
