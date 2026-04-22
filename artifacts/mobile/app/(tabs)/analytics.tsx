@@ -18,6 +18,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery } from "@tanstack/react-query";
 import Colors from "@/constants/colors";
 import { useAuth } from "@/context/AuthContext";
+import { HotelPicker, useEffectiveHotelId } from "@/components/HotelPicker";
 import { api } from "@/lib/api";
 
 const C = Colors.light;
@@ -51,15 +52,16 @@ export default function AnalyticsScreen() {
   const [year, setYear] = useState(now.getFullYear());
   const [showMonthPicker, setShowMonthPicker] = useState(false);
 
-  const hotelParam = user?.role !== "admin" && user?.hotelId ? `&hotelId=${user.hotelId}` : "";
+  const effectiveHotelId = useEffectiveHotelId();
+  const hotelParam = effectiveHotelId ? `&hotelId=${effectiveHotelId}` : "";
 
   const occupancyQuery = useQuery<OccupancyStats>({
-    queryKey: ["occupancy", month, year, user?.hotelId],
+    queryKey: ["occupancy", month, year, effectiveHotelId],
     queryFn: () => api.get<OccupancyStats>(`/analytics/occupancy?month=${month}&year=${year}${hotelParam}`),
   });
 
   const revenueQuery = useQuery<RevenueStats>({
-    queryKey: ["revenue", year, user?.hotelId],
+    queryKey: ["revenue", year, effectiveHotelId],
     queryFn: () => api.get<RevenueStats>(`/analytics/revenue?year=${year}${hotelParam}`),
   });
 
@@ -115,6 +117,7 @@ export default function AnalyticsScreen() {
           <Text style={styles.monthText}>{MONTHS_SHORT[month - 1]} {year}</Text>
           <Feather name="chevron-down" size={14} color={C.accent} />
         </Pressable>
+        <HotelPicker variant="pill" />
       </View>
 
       {isLoading ? (
@@ -278,7 +281,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: C.background },
   content: { paddingHorizontal: 20 },
   title: { fontFamily: "Inter_700Bold", fontSize: 28, color: C.text, letterSpacing: -0.5 },
-  filterRow: { flexDirection: "row", marginTop: 8, marginBottom: 16 },
+  filterRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8, marginBottom: 16 },
   monthPill: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: C.accentLight, alignSelf: "flex-start", borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8 },
   monthText: { fontFamily: "Inter_600SemiBold", fontSize: 14, color: C.accent },
   centered: { flex: 1, justifyContent: "center", alignItems: "center", minHeight: 300 },

@@ -14,6 +14,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Colors from "@/constants/colors";
+import { HotelPicker, useEffectiveHotelId } from "@/components/HotelPicker";
 import { api } from "@/lib/api";
 
 const C = Colors.light;
@@ -31,9 +32,12 @@ export default function AgenciesScreen() {
   const insets = useSafeAreaInsets();
   const qc = useQueryClient();
 
+  const effectiveHotelId = useEffectiveHotelId();
+  const hotelParam = effectiveHotelId ? `?hotelId=${effectiveHotelId}` : "";
+
   const { data: agencies, isLoading, refetch, isFetching } = useQuery<Agency[]>({
-    queryKey: ["agencies"],
-    queryFn: () => api.get<Agency[]>("/agencies"),
+    queryKey: ["agencies", effectiveHotelId],
+    queryFn: () => api.get<Agency[]>(`/agencies${hotelParam}`),
   });
 
   const deleteMutation = useMutation({
@@ -58,6 +62,10 @@ export default function AgenciesScreen() {
         <Pressable style={styles.addBtn} onPress={() => router.push("/agency/new" as any)}>
           <Feather name="plus" size={22} color="#fff" />
         </Pressable>
+      </View>
+
+      <View style={styles.filterRow}>
+        <HotelPicker variant="pill" />
       </View>
 
       {isLoading ? (
@@ -123,7 +131,8 @@ export default function AgenciesScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: C.background },
-  headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20, paddingBottom: 16 },
+  headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20, paddingBottom: 12 },
+  filterRow: { paddingHorizontal: 20, marginBottom: 12 },
   title: { fontFamily: "Inter_700Bold", fontSize: 28, color: C.text, letterSpacing: -0.5 },
   addBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: C.accent, justifyContent: "center", alignItems: "center" },
   centered: { flex: 1, justifyContent: "center", alignItems: "center" },

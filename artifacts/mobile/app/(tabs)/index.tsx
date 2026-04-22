@@ -1,9 +1,8 @@
 import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
-import React, { useState } from "react";
+import React from "react";
 import {
   ActivityIndicator,
-  Modal,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -15,6 +14,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery } from "@tanstack/react-query";
 import Colors from "@/constants/colors";
 import { useAuth } from "@/context/AuthContext";
+import { HotelPicker, useEffectiveHotelId } from "@/components/HotelPicker";
 import { api } from "@/lib/api";
 
 const C = Colors.light;
@@ -27,12 +27,6 @@ interface DashboardStats {
   totalRooms: number;
   occupancyPercentage: number;
   monthlyRevenue: number;
-}
-
-interface Hotel {
-  id: number;
-  name: string;
-  totalRooms: number;
 }
 
 interface Booking {
@@ -50,20 +44,7 @@ interface Booking {
 export default function DashboardScreen() {
   const { user, logout } = useAuth();
   const insets = useSafeAreaInsets();
-  const isAdmin = user?.role === "admin";
-
-  const [selectedHotelId, setSelectedHotelId] = useState<number | "all">("all");
-  const [showHotelPicker, setShowHotelPicker] = useState(false);
-
-  const hotelsQuery = useQuery<Hotel[]>({
-    queryKey: ["hotels"],
-    queryFn: () => api.get<Hotel[]>("/hotels"),
-    enabled: isAdmin,
-  });
-
-  const effectiveHotelId = isAdmin
-    ? (selectedHotelId === "all" ? null : selectedHotelId)
-    : (user?.hotelId ?? null);
+  const effectiveHotelId = useEffectiveHotelId();
   const hotelParam = effectiveHotelId ? `?hotelId=${effectiveHotelId}` : "";
 
   const statsQuery = useQuery<DashboardStats>({
@@ -80,12 +61,6 @@ export default function DashboardScreen() {
     queryKey: ["dashboard-checkouts", effectiveHotelId],
     queryFn: () => api.get<Booking[]>(`/dashboard/checkouts${hotelParam}`),
   });
-
-  const selectedHotelName = isAdmin
-    ? (selectedHotelId === "all"
-        ? "All Hotels"
-        : hotelsQuery.data?.find((h) => h.id === selectedHotelId)?.name ?? "Select Hotel")
-    : null;
 
   const isLoading = statsQuery.isLoading;
 
@@ -123,67 +98,8 @@ export default function DashboardScreen() {
         </View>
       </View>
 
-      {isAdmin ? (
-        <Pressable style={styles.hotelBanner} onPress={() => setShowHotelPicker(true)}>
-          <Feather name="home" size={16} color={C.gold} />
-          <Text style={styles.hotelName}>{selectedHotelName}</Text>
-          <Text style={styles.hotelRooms}>{statsQuery.data?.totalRooms ?? 0} Rooms</Text>
-          <Feather name="chevron-down" size={18} color="rgba(255,255,255,0.85)" />
-        </Pressable>
-      ) : user?.hotel && (
-        <View style={styles.hotelBanner}>
-          <Feather name="home" size={16} color={C.gold} />
-          <Text style={styles.hotelName}>{user.hotel.name}</Text>
-          <Text style={styles.hotelRooms}>{user.hotel.totalRooms} Rooms</Text>
-        </View>
-      )}
+      <HotelPicker />
 
-      {isAdmin && (
-        <Modal visible={showHotelPicker} animationType="slide" transparent onRequestClose={() => setShowHotelPicker(false)}>
-          <Pressable style={styles.modalOverlay} onPress={() => setShowHotelPicker(false)}>
-            <Pressable style={styles.modalContent} onPress={(e) => e.stopPropagation()}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Select Hotel</Text>
-                <Pressable onPress={() => setShowHotelPicker(false)}>
-                  <Feather name="x" size={22} color={C.text} />
-                </Pressable>
-              </View>
-              <ScrollView style={{ maxHeight: 400 }}>
-                <Pressable
-                  style={[styles.hotelOption, selectedHotelId === "all" && styles.hotelOptionActive]}
-                  onPress={() => { setSelectedHotelId("all"); setShowHotelPicker(false); }}
-                >
-                  <Feather name="grid" size={18} color={selectedHotelId === "all" ? "#fff" : C.text} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.hotelOptionName, selectedHotelId === "all" && { color: "#fff" }]}>All Hotels</Text>
-                    <Text style={[styles.hotelOptionMeta, selectedHotelId === "all" && { color: "rgba(255,255,255,0.75)" }]}>
-                      Aggregated across {hotelsQuery.data?.length ?? 0} hotels
-                    </Text>
-                  </View>
-                  {selectedHotelId === "all" && <Feather name="check" size={20} color="#fff" />}
-                </Pressable>
-                {(hotelsQuery.data ?? []).map((h) => {
-                  const active = selectedHotelId === h.id;
-                  return (
-                    <Pressable
-                      key={h.id}
-                      style={[styles.hotelOption, active && styles.hotelOptionActive]}
-                      onPress={() => { setSelectedHotelId(h.id); setShowHotelPicker(false); }}
-                    >
-                      <Feather name="home" size={18} color={active ? "#fff" : C.accent} />
-                      <View style={{ flex: 1 }}>
-                        <Text style={[styles.hotelOptionName, active && { color: "#fff" }]}>{h.name}</Text>
-                        <Text style={[styles.hotelOptionMeta, active && { color: "rgba(255,255,255,0.75)" }]}>{h.totalRooms} rooms</Text>
-                      </View>
-                      {active && <Feather name="check" size={20} color="#fff" />}
-                    </Pressable>
-                  );
-                })}
-              </ScrollView>
-            </Pressable>
-          </Pressable>
-        </Modal>
-      )}
 
       {isLoading ? (
         <View style={styles.loadingBox}>

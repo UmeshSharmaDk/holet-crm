@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery } from "@tanstack/react-query";
 import Colors from "@/constants/colors";
 import { useAuth } from "@/context/AuthContext";
+import { HotelPicker, useEffectiveHotelId } from "@/components/HotelPicker";
 import { api } from "@/lib/api";
 
 const C = Colors.light;
@@ -60,8 +61,9 @@ export default function BookingsScreen() {
   const [showMonthPicker, setShowMonthPicker] = useState(false);
   const [filterStatus, setFilterStatus] = useState<string>("all");
 
-  const hotelParam = user?.role !== "admin" && user?.hotelId ? `&hotelId=${user.hotelId}` : "";
-  const queryKey = ["bookings", selectedMonth, selectedYear, user?.hotelId];
+  const effectiveHotelId = useEffectiveHotelId();
+  const hotelParam = effectiveHotelId ? `&hotelId=${effectiveHotelId}` : "";
+  const queryKey = ["bookings", selectedMonth, selectedYear, effectiveHotelId];
 
   const { data: bookings, isLoading, refetch, isFetching } = useQuery<Booking[]>({
     queryKey,
@@ -85,12 +87,13 @@ export default function BookingsScreen() {
         </Pressable>
       </View>
 
-      <View style={styles.monthSelector}>
+      <View style={styles.filterRow}>
         <Pressable onPress={() => setShowMonthPicker(true)} style={styles.monthPill}>
           <Feather name="calendar" size={14} color={C.accent} />
           <Text style={styles.monthText}>{MONTHS[selectedMonth - 1]} {selectedYear}</Text>
           <Feather name="chevron-down" size={14} color={C.accent} />
         </Pressable>
+        <HotelPicker variant="pill" />
       </View>
 
       <View style={styles.searchRow}>
@@ -242,7 +245,7 @@ const styles = StyleSheet.create({
   headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20, paddingBottom: 12 },
   title: { fontFamily: "Inter_700Bold", fontSize: 28, color: C.text, letterSpacing: -0.5 },
   addBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: C.accent, justifyContent: "center", alignItems: "center" },
-  monthSelector: { paddingHorizontal: 20, marginBottom: 12 },
+  filterRow: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 8, paddingHorizontal: 20, marginBottom: 12 },
   monthPill: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: C.accentLight, alignSelf: "flex-start", borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8 },
   monthText: { fontFamily: "Inter_600SemiBold", fontSize: 14, color: C.accent },
   searchRow: { paddingHorizontal: 16, marginBottom: 8 },

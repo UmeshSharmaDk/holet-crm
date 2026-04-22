@@ -16,6 +16,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AuthProvider } from "@/context/AuthContext";
+import { HotelFilterProvider } from "@/context/HotelFilterContext";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -47,6 +48,7 @@ export default function RootLayout() {
       <ErrorBoundary>
         <QueryClientProvider client={queryClient}>
           <AuthProvider>
+            <HotelFilterProvider>
             <GestureHandlerRootView style={{ flex: 1 }}>
               <KeyboardProvider>
                 <Stack
@@ -59,6 +61,7 @@ export default function RootLayout() {
                 />
               </KeyboardProvider>
             </GestureHandlerRootView>
+            </HotelFilterProvider>
           </AuthProvider>
         </QueryClientProvider>
       </ErrorBoundary>

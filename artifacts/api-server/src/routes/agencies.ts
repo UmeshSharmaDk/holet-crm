@@ -7,16 +7,19 @@ const router = Router();
 
 router.get("/", requireAuth, async (req, res) => {
   try {
+    const { hotelId: queryHotelId } = req.query;
+    const effectiveHotelId = req.user?.role === "admin"
+      ? queryHotelId ? parseInt(queryHotelId as string) : undefined
+      : req.user?.hotelId ?? undefined;
+
     let agencies;
-    if (req.user?.role === "admin") {
+    if (effectiveHotelId) {
+      agencies = await db.select().from(agenciesTable).where(eq(agenciesTable.hotelId, effectiveHotelId)).orderBy(agenciesTable.name);
+    } else if (req.user?.role === "admin") {
       agencies = await db.select().from(agenciesTable).orderBy(agenciesTable.name);
     } else {
-      const hotelId = req.user?.hotelId;
-      if (!hotelId) {
-        res.json([]);
-        return;
-      }
-      agencies = await db.select().from(agenciesTable).where(eq(agenciesTable.hotelId, hotelId)).orderBy(agenciesTable.name);
+      res.json([]);
+      return;
     }
     res.json(agencies);
   } catch (error) {
