@@ -50,8 +50,8 @@ const functionDeclarations: any[] = [
         guestName: { type: Type.STRING },
         guestEmail: { type: Type.STRING },
         guestPhone: { type: Type.STRING },
-        roomNumber: { type: Type.STRING },
-        roomType: { type: Type.STRING },
+        numberOfRooms: { type: Type.INTEGER, description: "How many rooms booked. Default 1." },
+        numberOfPersons: { type: Type.INTEGER, description: "How many persons. Default 1." },
         checkIn: { type: Type.STRING, description: "YYYY-MM-DD" },
         checkOut: { type: Type.STRING, description: "YYYY-MM-DD" },
         roomRent: { type: Type.NUMBER },
@@ -75,8 +75,8 @@ const functionDeclarations: any[] = [
         guestName: { type: Type.STRING },
         guestEmail: { type: Type.STRING },
         guestPhone: { type: Type.STRING },
-        roomNumber: { type: Type.STRING },
-        roomType: { type: Type.STRING },
+        numberOfRooms: { type: Type.INTEGER },
+        numberOfPersons: { type: Type.INTEGER },
         checkIn: { type: Type.STRING },
         checkOut: { type: Type.STRING },
         roomRent: { type: Type.NUMBER },
@@ -156,8 +156,8 @@ async function executeTool(name: string, args: any, reqUser: any): Promise<any> 
       guestName: args.guestName,
       guestEmail: args.guestEmail ?? null,
       guestPhone: args.guestPhone ?? null,
-      roomNumber: args.roomNumber ?? null,
-      roomType: args.roomType ?? null,
+      numberOfRooms: args.numberOfRooms ?? 1,
+      numberOfPersons: args.numberOfPersons ?? 1,
       checkIn: args.checkIn,
       checkOut: args.checkOut,
       roomRent: String(rr),
@@ -185,9 +185,11 @@ async function executeTool(name: string, args: any, reqUser: any): Promise<any> 
       roomRent: String(rr), addOns: String(ao), totalCost: String(totalCost),
       receipt: String(rc), balance: String(balance), updatedAt: new Date(),
     };
-    for (const k of ["guestName", "guestEmail", "guestPhone", "roomNumber", "roomType", "checkIn", "checkOut", "notes", "status", "agencyId"]) {
+    for (const k of ["guestName", "guestEmail", "guestPhone", "checkIn", "checkOut", "notes", "status", "agencyId"]) {
       if (args[k] !== undefined) updates[k] = args[k];
     }
+    if (args.numberOfRooms !== undefined) updates.numberOfRooms = parseInt(String(args.numberOfRooms));
+    if (args.numberOfPersons !== undefined) updates.numberOfPersons = parseInt(String(args.numberOfPersons));
     const [b] = await db.update(bookingsTable).set(updates).where(eq(bookingsTable.id, args.id)).returning();
     return { success: true, booking: { ...b, roomRent: rr, addOns: ao, totalCost, receipt: rc, balance } };
   }
@@ -201,6 +203,7 @@ async function executeTool(name: string, args: any, reqUser: any): Promise<any> 
     ];
     if (myHotelId) conditions.push(eq(bookingsTable.hotelId, myHotelId));
     const rows = await db.select().from(bookingsTable).where(and(...conditions));
+    const occupiedRooms = rows.reduce((s, b) => s + (b.numberOfRooms ?? 1), 0);
     let totalRooms = 0;
     if (myHotelId) {
       const [h] = await db.select().from(hotelsTable).where(eq(hotelsTable.id, myHotelId));
@@ -211,11 +214,11 @@ async function executeTool(name: string, args: any, reqUser: any): Promise<any> 
     }
     return {
       date,
-      occupiedRooms: rows.length,
+      occupiedRooms,
       totalRooms,
-      vacantRooms: Math.max(0, totalRooms - rows.length),
-      occupancyPercentage: totalRooms > 0 ? Math.round((rows.length / totalRooms) * 100) : 0,
-      bookings: rows.map((b) => ({ id: b.id, guestName: b.guestName, roomNumber: b.roomNumber, checkIn: b.checkIn, checkOut: b.checkOut })),
+      vacantRooms: Math.max(0, totalRooms - occupiedRooms),
+      occupancyPercentage: totalRooms > 0 ? Math.round((occupiedRooms / totalRooms) * 100) : 0,
+      bookings: rows.map((b) => ({ id: b.id, guestName: b.guestName, numberOfRooms: b.numberOfRooms, numberOfPersons: b.numberOfPersons, checkIn: b.checkIn, checkOut: b.checkOut })),
     };
   }
 
@@ -226,7 +229,7 @@ async function executeTool(name: string, args: any, reqUser: any): Promise<any> 
     const allBookings = conditions.length ? await db.select().from(bookingsTable).where(and(...conditions)) : await db.select().from(bookingsTable);
     const checkins = allBookings.filter((b) => b.checkIn === today).length;
     const checkouts = allBookings.filter((b) => b.checkOut === today).length;
-    const occupied = allBookings.filter((b) => b.checkIn <= today! && b.checkOut > today! && (b.status === "confirmed" || b.status === "checked_in")).length;
+    const occupied = allBookings.filter((b) => b.checkIn <= today! && b.checkOut > today! && (b.status === "confirmed" || b.status === "checked_in")).reduce((s, b) => s + (b.numberOfRooms ?? 1), 0);
     const month = new Date().getMonth() + 1, year = new Date().getFullYear();
     const monthStart = `${year}-${String(month).padStart(2, "0")}-01`;
     const monthRevenue = allBookings.filter((b) => b.checkIn >= monthStart).reduce((s, b) => s + parseFloat(b.totalCost), 0);

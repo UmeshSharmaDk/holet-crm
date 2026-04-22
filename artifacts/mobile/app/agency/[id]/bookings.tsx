@@ -20,8 +20,8 @@ const C = Colors.light;
 interface Booking {
   id: number;
   guestName: string;
-  roomNumber: string | null;
-  roomType: string | null;
+  numberOfRooms: number;
+  numberOfPersons: number;
   checkIn: string;
   checkOut: string;
   status: string;
@@ -124,8 +124,8 @@ function BookingCard({ booking }: { booking: Booking }) {
       </View>
       <View style={styles.cardMeta}>
         <View style={styles.metaItem}>
-          <Feather name="home" size={12} color={C.textSecondary} />
-          <Text style={styles.metaText}>{booking.roomNumber ? `Room ${booking.roomNumber}` : booking.roomType ?? "—"}</Text>
+          <Feather name="grid" size={12} color={C.textSecondary} />
+          <Text style={styles.metaText}>{booking.numberOfRooms ?? 1} room{(booking.numberOfRooms ?? 1) !== 1 ? "s" : ""} · {booking.numberOfPersons ?? 1} pax</Text>
         </View>
         <View style={styles.metaItem}>
           <Feather name="calendar" size={12} color={C.textSecondary} />

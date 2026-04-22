@@ -35,8 +35,8 @@ export default function NewBookingScreen() {
     guestName: "",
     guestEmail: "",
     guestPhone: "",
-    roomNumber: "",
-    roomType: "",
+    numberOfRooms: "1",
+    numberOfPersons: "1",
     checkIn: today,
     checkOut: tomorrow,
     roomRent: "",
@@ -84,8 +84,8 @@ export default function NewBookingScreen() {
       guestName: form.guestName.trim(),
       guestEmail: form.guestEmail.trim() || null,
       guestPhone: form.guestPhone.trim() || null,
-      roomNumber: form.roomNumber.trim() || null,
-      roomType: form.roomType.trim() || null,
+      numberOfRooms: parseInt(form.numberOfRooms) || 1,
+      numberOfPersons: parseInt(form.numberOfPersons) || 1,
       checkIn: form.checkIn,
       checkOut: form.checkOut,
       roomRent,
@@ -125,10 +125,10 @@ export default function NewBookingScreen() {
         <SectionHeader title="Room Details" />
         <View style={styles.row2}>
           <View style={{ flex: 1 }}>
-            <FormField label="Room Number" value={form.roomNumber} onChangeText={(v) => update("roomNumber", v)} placeholder="101" />
+            <FormField label="Number of Rooms" value={form.numberOfRooms} onChangeText={(v) => update("numberOfRooms", v)} placeholder="1" keyboardType="numeric" />
           </View>
           <View style={{ flex: 1 }}>
-            <FormField label="Room Type" value={form.roomType} onChangeText={(v) => update("roomType", v)} placeholder="Deluxe" />
+            <FormField label="Number of Persons" value={form.numberOfPersons} onChangeText={(v) => update("numberOfPersons", v)} placeholder="1" keyboardType="numeric" />
           </View>
         </View>
 

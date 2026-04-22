@@ -39,10 +39,10 @@ router.get("/occupancy", requireAuth, async (req, res) => {
       if (effectiveHotelId) conditions.push(eq(bookingsTable.hotelId, effectiveHotelId));
 
       const [result] = await db
-        .select({ count: sql<number>`count(*)` })
+        .select({ total: sql<number>`coalesce(sum(${bookingsTable.numberOfRooms}), 0)` })
         .from(bookingsTable)
         .where(and(...conditions));
-      const occupied = Number(result?.count ?? 0);
+      const occupied = Number(result?.total ?? 0);
       totalOccupied += occupied;
       const percentage = totalRooms > 0 ? Math.round((occupied / totalRooms) * 100) : 0;
       dailyOccupancy.push({ date: dateStr, occupiedRooms: occupied, totalRooms, percentage });

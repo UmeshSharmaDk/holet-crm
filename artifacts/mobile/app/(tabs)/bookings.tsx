@@ -25,8 +25,8 @@ interface Booking {
   guestName: string;
   guestEmail: string | null;
   guestPhone: string | null;
-  roomNumber: string | null;
-  roomType: string | null;
+  numberOfRooms: number;
+  numberOfPersons: number;
   checkIn: string;
   checkOut: string;
   roomRent: number;
@@ -69,7 +69,7 @@ export default function BookingsScreen() {
   });
 
   const filtered = (bookings ?? []).filter((b) => {
-    const matchSearch = !search || b.guestName.toLowerCase().includes(search.toLowerCase()) || b.roomNumber?.includes(search) || b.agency?.name?.toLowerCase().includes(search.toLowerCase());
+    const matchSearch = !search || b.guestName.toLowerCase().includes(search.toLowerCase()) || b.agency?.name?.toLowerCase().includes(search.toLowerCase());
     const matchStatus = filterStatus === "all" || b.status === filterStatus;
     return matchSearch && matchStatus;
   });
@@ -98,7 +98,7 @@ export default function BookingsScreen() {
           <Feather name="search" size={16} color={C.textSecondary} />
           <TextInput
             style={styles.searchInput}
-            placeholder="Search guests, rooms..."
+            placeholder="Search guests, agencies..."
             placeholderTextColor={C.textSecondary}
             value={search}
             onChangeText={setSearch}
@@ -201,7 +201,8 @@ function BookingCard({ booking }: { booking: Booking }) {
         <DetailChip icon="log-in" text={formatDate(booking.checkIn)} />
         <DetailChip icon="log-out" text={formatDate(booking.checkOut)} />
         <DetailChip icon="moon" text={`${nights}n`} />
-        {booking.roomNumber && <DetailChip icon="hash" text={`Rm ${booking.roomNumber}`} />}
+        <DetailChip icon="grid" text={`${booking.numberOfRooms ?? 1} rm`} />
+        <DetailChip icon="users" text={`${booking.numberOfPersons ?? 1} pax`} />
       </View>
       <View style={styles.cardFinancials}>
         <View>

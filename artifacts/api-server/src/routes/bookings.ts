@@ -92,7 +92,7 @@ router.get("/:id", requireAuth, async (req, res) => {
 
 router.post("/", requireAuth, async (req, res) => {
   try {
-    const { guestName, guestEmail, guestPhone, roomNumber, roomType, checkIn, checkOut, roomRent, addOns, receipt, notes, status, hotelId, agencyId } = req.body;
+    const { guestName, guestEmail, guestPhone, numberOfRooms, numberOfPersons, checkIn, checkOut, roomRent, addOns, receipt, notes, status, hotelId, agencyId } = req.body;
     const effectiveHotelId = req.user?.role === "admin" ? hotelId : req.user?.hotelId;
     if (!guestName || !checkIn || !checkOut || roomRent === undefined || addOns === undefined || !effectiveHotelId) {
       res.status(400).json({ error: "Bad Request", message: "Required fields missing" });
@@ -107,8 +107,8 @@ router.post("/", requireAuth, async (req, res) => {
       guestName,
       guestEmail: guestEmail ?? null,
       guestPhone: guestPhone ?? null,
-      roomNumber: roomNumber ?? null,
-      roomType: roomType ?? null,
+      numberOfRooms: numberOfRooms != null ? parseInt(String(numberOfRooms)) : 1,
+      numberOfPersons: numberOfPersons != null ? parseInt(String(numberOfPersons)) : 1,
       checkIn,
       checkOut,
       roomRent: String(rr),
@@ -138,7 +138,7 @@ router.put("/:id", requireAuth, async (req, res) => {
       return;
     }
 
-    const { guestName, guestEmail, guestPhone, roomNumber, roomType, checkIn, checkOut, roomRent, addOns, receipt, notes, status, agencyId } = req.body;
+    const { guestName, guestEmail, guestPhone, numberOfRooms, numberOfPersons, checkIn, checkOut, roomRent, addOns, receipt, notes, status, agencyId } = req.body;
     const rr = roomRent !== undefined ? parseFloat(roomRent) : parseFloat(existing.roomRent);
     const ao = addOns !== undefined ? parseFloat(addOns) : parseFloat(existing.addOns);
     const rc = receipt !== undefined ? parseFloat(receipt) : parseFloat(existing.receipt);
@@ -150,8 +150,8 @@ router.put("/:id", requireAuth, async (req, res) => {
       { key: "checkIn", label: "Check-In" },
       { key: "checkOut", label: "Check-Out" },
       { key: "status", label: "Status" },
-      { key: "roomNumber", label: "Room Number" },
-      { key: "roomType", label: "Room Type" },
+      { key: "numberOfRooms", label: "Number of Rooms" },
+      { key: "numberOfPersons", label: "Number of Persons" },
     ];
     for (const f of fields) {
       const newVal = req.body[f.key];
@@ -171,8 +171,8 @@ router.put("/:id", requireAuth, async (req, res) => {
       guestName: guestName ?? existing.guestName,
       guestEmail: guestEmail !== undefined ? guestEmail : existing.guestEmail,
       guestPhone: guestPhone !== undefined ? guestPhone : existing.guestPhone,
-      roomNumber: roomNumber !== undefined ? roomNumber : existing.roomNumber,
-      roomType: roomType !== undefined ? roomType : existing.roomType,
+      numberOfRooms: numberOfRooms !== undefined ? parseInt(String(numberOfRooms)) : existing.numberOfRooms,
+      numberOfPersons: numberOfPersons !== undefined ? parseInt(String(numberOfPersons)) : existing.numberOfPersons,
       checkIn: checkIn ?? existing.checkIn,
       checkOut: checkOut ?? existing.checkOut,
       roomRent: String(rr),

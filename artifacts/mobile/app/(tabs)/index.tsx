@@ -31,8 +31,8 @@ interface DashboardStats {
 interface Booking {
   id: number;
   guestName: string;
-  roomNumber: string | null;
-  roomType: string | null;
+  numberOfRooms: number;
+  numberOfPersons: number;
   checkIn: string;
   checkOut: string;
   status: string;
@@ -233,7 +233,7 @@ function BookingRow({ booking, type }: { booking: Booking; type: "checkin" | "ch
       <View style={[styles.bookingDot, { backgroundColor: type === "checkin" ? C.checkin : C.checkout }]} />
       <View style={styles.bookingInfo}>
         <Text style={styles.guestName}>{booking.guestName}</Text>
-        <Text style={styles.roomInfo}>{booking.roomNumber ? `Room ${booking.roomNumber}` : booking.roomType ?? "—"}</Text>
+        <Text style={styles.roomInfo}>{booking.numberOfRooms ?? 1} room{(booking.numberOfRooms ?? 1) !== 1 ? "s" : ""} · {booking.numberOfPersons ?? 1} pax</Text>
       </View>
       <View style={styles.bookingRight}>
         {booking.balance > 0 && (

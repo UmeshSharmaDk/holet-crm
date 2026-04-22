@@ -34,8 +34,8 @@ interface Booking {
   guestName: string;
   guestEmail: string | null;
   guestPhone: string | null;
-  roomNumber: string | null;
-  roomType: string | null;
+  numberOfRooms: number;
+  numberOfPersons: number;
   checkIn: string;
   checkOut: string;
   roomRent: number;
@@ -59,8 +59,8 @@ export default function EditBookingScreen() {
     guestName: "",
     guestEmail: "",
     guestPhone: "",
-    roomNumber: "",
-    roomType: "",
+    numberOfRooms: "1",
+    numberOfPersons: "1",
     checkIn: "",
     checkOut: "",
     roomRent: "",
@@ -88,8 +88,8 @@ export default function EditBookingScreen() {
         guestName: booking.guestName,
         guestEmail: booking.guestEmail ?? "",
         guestPhone: booking.guestPhone ?? "",
-        roomNumber: booking.roomNumber ?? "",
-        roomType: booking.roomType ?? "",
+        numberOfRooms: String(booking.numberOfRooms ?? 1),
+        numberOfPersons: String(booking.numberOfPersons ?? 1),
         checkIn: booking.checkIn,
         checkOut: booking.checkOut,
         roomRent: String(booking.roomRent),
@@ -128,8 +128,8 @@ export default function EditBookingScreen() {
       guestName: form.guestName.trim(),
       guestEmail: form.guestEmail.trim() || null,
       guestPhone: form.guestPhone.trim() || null,
-      roomNumber: form.roomNumber.trim() || null,
-      roomType: form.roomType.trim() || null,
+      numberOfRooms: parseInt(form.numberOfRooms) || 1,
+      numberOfPersons: parseInt(form.numberOfPersons) || 1,
       checkIn: form.checkIn,
       checkOut: form.checkOut,
       roomRent,
@@ -163,8 +163,8 @@ export default function EditBookingScreen() {
 
           <SectionHeader title="Room Details" />
           <Row>
-            <FormField label="Room Number" value={form.roomNumber} onChangeText={(v) => update("roomNumber", v)} placeholder="101" flex />
-            <FormField label="Room Type" value={form.roomType} onChangeText={(v) => update("roomType", v)} placeholder="Deluxe" flex />
+            <FormField label="Number of Rooms" value={form.numberOfRooms} onChangeText={(v) => update("numberOfRooms", v)} placeholder="1" keyboardType="numeric" flex />
+            <FormField label="Number of Persons" value={form.numberOfPersons} onChangeText={(v) => update("numberOfPersons", v)} placeholder="1" keyboardType="numeric" flex />
           </Row>
 
           <SectionHeader title="Dates" />

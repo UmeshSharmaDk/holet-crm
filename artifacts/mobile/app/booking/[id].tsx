@@ -24,8 +24,8 @@ interface Booking {
   guestName: string;
   guestEmail: string | null;
   guestPhone: string | null;
-  roomNumber: string | null;
-  roomType: string | null;
+  numberOfRooms: number;
+  numberOfPersons: number;
   checkIn: string;
   checkOut: string;
   roomRent: number;
@@ -153,15 +153,13 @@ export default function BookingDetailScreen() {
           </View>
         </View>
 
-        {(booking.roomNumber || booking.roomType || booking.agency || booking.hotel || booking.notes) && (
-          <View style={styles.infoSection}>
-            {booking.hotel && <InfoRow icon="home" label="Hotel" value={booking.hotel.name} />}
-            {booking.roomNumber && <InfoRow icon="hash" label="Room" value={booking.roomNumber} />}
-            {booking.roomType && <InfoRow icon="layers" label="Type" value={booking.roomType} />}
-            {booking.agency && <InfoRow icon="briefcase" label="Agency" value={booking.agency.name} />}
-            {booking.notes && <InfoRow icon="file-text" label="Notes" value={booking.notes} />}
-          </View>
-        )}
+        <View style={styles.infoSection}>
+          {booking.hotel && <InfoRow icon="home" label="Hotel" value={booking.hotel.name} />}
+          <InfoRow icon="grid" label="Rooms" value={String(booking.numberOfRooms ?? 1)} />
+          <InfoRow icon="users" label="Persons" value={String(booking.numberOfPersons ?? 1)} />
+          {booking.agency && <InfoRow icon="briefcase" label="Agency" value={booking.agency.name} />}
+          {booking.notes && <InfoRow icon="file-text" label="Notes" value={booking.notes} />}
+        </View>
 
         <View style={styles.financialCard}>
           <Text style={styles.financialTitle}>Financial Summary</Text>
