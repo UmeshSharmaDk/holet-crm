@@ -77,9 +77,9 @@ export default function EditAgencyScreen() {
       <TopBar />
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-          <FormField label="Agency Name *" value={form.name} onChangeText={(v) => setForm((f) => ({ ...f, name: v }))} placeholder="Grand Travel Agency" />
-          <FormField label="Contact Email" value={form.contactEmail} onChangeText={(v) => setForm((f) => ({ ...f, contactEmail: v }))} placeholder="contact@agency.com" keyboardType="email-address" />
-          <FormField label="Contact Phone" value={form.contactPhone} onChangeText={(v) => setForm((f) => ({ ...f, contactPhone: v }))} placeholder="+1 234 567 8900" keyboardType="phone-pad" />
+          <FormField label="Agency Name *" value={form.name} onChangeText={(v: string) => setForm((f) => ({ ...f, name: v }))} placeholder="Grand Travel Agency" />
+          <FormField label="Contact Email" value={form.contactEmail} onChangeText={(v: string) => setForm((f) => ({ ...f, contactEmail: v }))} placeholder="contact@agency.com" keyboardType="email-address" />
+          <FormField label="Contact Phone" value={form.contactPhone} onChangeText={(v: string) => setForm((f) => ({ ...f, contactPhone: v }))} placeholder="+1 234 567 8900" keyboardType="phone-pad" />
 
           <Pressable
             style={({ pressed }) => [styles.submitBtn, pressed && { opacity: 0.85 }, mutation.isPending && { opacity: 0.6 }]}

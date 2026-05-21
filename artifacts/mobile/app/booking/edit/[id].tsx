@@ -157,14 +157,14 @@ export default function EditBookingScreen() {
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
 
           <SectionHeader title="Guest Information" />
-          <FormField label="Guest Name *" value={form.guestName} onChangeText={(v) => update("guestName", v)} placeholder="John Smith" />
-          <FormField label="Email" value={form.guestEmail} onChangeText={(v) => update("guestEmail", v)} placeholder="john@email.com" keyboardType="email-address" />
-          <FormField label="Phone" value={form.guestPhone} onChangeText={(v) => update("guestPhone", v)} placeholder="+1 234 567 8900" keyboardType="phone-pad" />
+          <FormField label="Guest Name *" value={form.guestName} onChangeText={(v: string) => update("guestName", v)} placeholder="John Smith" />
+          <FormField label="Email" value={form.guestEmail} onChangeText={(v: string) => update("guestEmail", v)} placeholder="john@email.com" keyboardType="email-address" />
+          <FormField label="Phone" value={form.guestPhone} onChangeText={(v: string) => update("guestPhone", v)} placeholder="+1 234 567 8900" keyboardType="phone-pad" />
 
           <SectionHeader title="Room Details" />
           <Row>
-            <FormField label="Number of Rooms" value={form.numberOfRooms} onChangeText={(v) => update("numberOfRooms", v)} placeholder="1" keyboardType="numeric" flex />
-            <FormField label="Number of Persons" value={form.numberOfPersons} onChangeText={(v) => update("numberOfPersons", v)} placeholder="1" keyboardType="numeric" flex />
+            <FormField label="Number of Rooms" value={form.numberOfRooms} onChangeText={(v: string) => update("numberOfRooms", v)} placeholder="1" keyboardType="numeric" flex />
+            <FormField label="Number of Persons" value={form.numberOfPersons} onChangeText={(v: string) => update("numberOfPersons", v)} placeholder="1" keyboardType="numeric" flex />
           </Row>
 
           <SectionHeader title="Dates" />
@@ -182,10 +182,10 @@ export default function EditBookingScreen() {
 
           <SectionHeader title="Financials" />
           <Row>
-            <FormField label="Room Rent (₹)" value={form.roomRent} onChangeText={(v) => update("roomRent", v)} placeholder="0.00" keyboardType="numeric" flex />
-            <FormField label="Add-ons (₹)" value={form.addOns} onChangeText={(v) => update("addOns", v)} placeholder="0.00" keyboardType="numeric" flex />
+            <FormField label="Room Rent (₹)" value={form.roomRent} onChangeText={(v: string) => update("roomRent", v)} placeholder="0.00" keyboardType="numeric" flex />
+            <FormField label="Add-ons (₹)" value={form.addOns} onChangeText={(v: string) => update("addOns", v)} placeholder="0.00" keyboardType="numeric" flex />
           </Row>
-          <FormField label="Receipt (₹)" value={form.receipt} onChangeText={(v) => update("receipt", v)} placeholder="0.00" keyboardType="numeric" />
+          <FormField label="Receipt (₹)" value={form.receipt} onChangeText={(v: string) => update("receipt", v)} placeholder="0.00" keyboardType="numeric" />
 
           <View style={styles.calcCard}>
             <CalcRow label="Total Cost" value={`₹${totalCost.toFixed(2)}`} />
@@ -221,7 +221,7 @@ export default function EditBookingScreen() {
           <TextInput
             style={styles.textArea}
             value={form.notes}
-            onChangeText={(v) => update("notes", v)}
+            onChangeText={(v: string) => update("notes", v)}
             placeholder="Special requests, notes..."
             placeholderTextColor={C.textSecondary}
             multiline

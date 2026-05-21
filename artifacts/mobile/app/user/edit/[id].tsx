@@ -79,9 +79,9 @@ export default function EditUserScreen() {
       <TopBar />
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-          <FormField label="Full Name *" value={form.name} onChangeText={(v) => setForm((f) => ({ ...f, name: v }))} placeholder="Jane Doe" />
-          <FormField label="Email *" value={form.email} onChangeText={(v) => setForm((f) => ({ ...f, email: v }))} placeholder="jane@hotel.com" keyboardType="email-address" />
-          <FormField label="New Password (leave blank to keep)" value={form.password} onChangeText={(v) => setForm((f) => ({ ...f, password: v }))} placeholder="••••••••" secureTextEntry />
+          <FormField label="Full Name *" value={form.name} onChangeText={(v: string) => setForm((f) => ({ ...f, name: v }))} placeholder="Jane Doe" />
+          <FormField label="Email *" value={form.email} onChangeText={(v: string) => setForm((f) => ({ ...f, email: v }))} placeholder="jane@hotel.com" keyboardType="email-address" />
+          <FormField label="New Password (leave blank to keep)" value={form.password} onChangeText={(v: string) => setForm((f) => ({ ...f, password: v }))} placeholder="••••••••" secureTextEntry />
 
           <Text style={styles.sectionLabel}>Role *</Text>
           <View style={styles.chipRow}>

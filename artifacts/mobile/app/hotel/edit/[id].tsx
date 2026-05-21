@@ -72,7 +72,7 @@ export default function EditHotelScreen() {
           <TextInput
             style={styles.fieldInput}
             value={form.name}
-            onChangeText={(v) => setForm((f) => ({ ...f, name: v }))}
+            onChangeText={(v: string) => setForm((f) => ({ ...f, name: v }))}
             placeholder="Grand Palace Hotel"
             placeholderTextColor={C.textSecondary}
           />
@@ -81,7 +81,7 @@ export default function EditHotelScreen() {
           <TextInput
             style={styles.fieldInput}
             value={form.totalRooms}
-            onChangeText={(v) => setForm((f) => ({ ...f, totalRooms: v }))}
+            onChangeText={(v: string) => setForm((f) => ({ ...f, totalRooms: v }))}
             placeholder="50"
             placeholderTextColor={C.textSecondary}
             keyboardType="numeric"
