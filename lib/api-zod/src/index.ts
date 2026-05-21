@@ -1,2 +1,3 @@
+// lib/api-zod/src/index.ts
 export * from "./generated/api";
-export * from "./generated/types";
+export type * from "./generated/types";
