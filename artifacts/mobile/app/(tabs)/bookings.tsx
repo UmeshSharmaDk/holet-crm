@@ -109,7 +109,7 @@ export default function BookingsScreen() {
         </View>
       </View>
 
-      <View style={styles.filterRow}>
+      <View style={styles.statusRow}>
         {["all", "confirmed", "checked_in", "checked_out", "cancelled"].map((s) => (
           <Pressable
             key={s}
@@ -251,6 +251,7 @@ const styles = StyleSheet.create({
   searchRow: { paddingHorizontal: 16, marginBottom: 8 },
   searchWrap: { flexDirection: "row", alignItems: "center", backgroundColor: C.surface, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, gap: 8, borderWidth: 1, borderColor: C.border },
   searchInput: { flex: 1, fontFamily: "Inter_400Regular", fontSize: 14, color: C.text },
+  statusRow: { flexDirection: "row", gap: 8, paddingHorizontal: 16, marginBottom: 4 },
   filterRow: { flexDirection: "row", gap: 8, paddingHorizontal: 16, marginBottom: 4 },
   filterChip: { borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: C.surfaceSecondary },
   filterChipActive: { backgroundColor: C.primary },
