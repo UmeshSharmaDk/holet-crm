@@ -78,7 +78,7 @@ router.get("/", requireAuth, async (req, res) => {
 
 router.get("/:id", requireAuth, async (req, res) => {
   try {
-    const [booking] = await db.select().from(bookingsTable).where(eq(bookingsTable.id, parseInt(req.params.id)));
+    const [booking] = await db.select().from(bookingsTable).where(eq(bookingsTable.id, parseInt(req.params.id as string)));
     if (!booking) {
       res.status(404).json({ error: "Not Found" });
       return;
@@ -131,7 +131,7 @@ router.post("/", requireAuth, async (req, res) => {
 
 router.put("/:id", requireAuth, async (req, res) => {
   try {
-    const bookingId = parseInt(req.params.id);
+    const bookingId = parseInt(req.params.id as string);
     const [existing] = await db.select().from(bookingsTable).where(eq(bookingsTable.id, bookingId));
     if (!existing) {
       res.status(404).json({ error: "Not Found" });
@@ -205,7 +205,7 @@ router.put("/:id", requireAuth, async (req, res) => {
 
 router.patch("/:id/payment", requireAuth, async (req, res) => {
   try {
-    const bookingId = parseInt(req.params.id);
+    const bookingId = parseInt(req.params.id as string);
     const [existing] = await db.select().from(bookingsTable).where(eq(bookingsTable.id, bookingId));
     if (!existing) {
       res.status(404).json({ error: "Not Found" });
@@ -232,7 +232,7 @@ router.patch("/:id/payment", requireAuth, async (req, res) => {
 
 router.delete("/:id", requireAuth, requireOwnerOrAdmin, async (req, res) => {
   try {
-    await db.delete(bookingsTable).where(eq(bookingsTable.id, parseInt(req.params.id)));
+    await db.delete(bookingsTable).where(eq(bookingsTable.id, parseInt(req.params.id as string)));
     res.status(204).send();
   } catch (error) {
     console.error(error);
