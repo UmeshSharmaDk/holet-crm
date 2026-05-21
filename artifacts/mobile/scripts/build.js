@@ -67,10 +67,9 @@ function getDeploymentDomain() {
     return stripProtocol(process.env.EXPO_PUBLIC_DOMAIN);
   }
 
-  console.error(
-    "ERROR: No deployment domain found. Set REPLIT_INTERNAL_APP_DOMAIN, REPLIT_DEV_DOMAIN, or EXPO_PUBLIC_DOMAIN",
-  );
-  process.exit(1);
+  // Fallback to your live Hostinger domain
+  console.log("No explicit domain env var found. Falling back to crm.outhillsmanali.com");
+  return "crm.outhillsmanali.com";
 }
 
 function prepareDirectories(timestamp) {
@@ -527,7 +526,7 @@ async function main() {
       reject(
         new Error(
           `Overall download timeout after ${downloadTimeout / 1000} seconds. ` +
-            "Metro may be struggling to generate bundles. Check Metro logs above.",
+          "Metro may be struggling to generate bundles. Check Metro logs above.",
         ),
       );
     }, downloadTimeout);
