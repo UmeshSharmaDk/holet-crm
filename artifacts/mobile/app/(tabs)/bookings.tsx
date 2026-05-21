@@ -87,8 +87,8 @@ export default function BookingsScreen() {
         </Pressable>
       </View>
 
-      <View style={styles.filterRow}>
-        <Pressable onPress={() => setShowMonthPicker(true)} style={styles.monthPill}>
+      <View style={styles.statusRow}>
+        {["all", "confirmed", "checked_in", "checked_out", "cancelled"].map((s) => (
           <Feather name="calendar" size={14} color={C.accent} />
           <Text style={styles.monthText}>{MONTHS[selectedMonth - 1]} {selectedYear}</Text>
           <Feather name="chevron-down" size={14} color={C.accent} />
@@ -123,62 +123,64 @@ export default function BookingsScreen() {
         ))}
       </View>
 
-      {isLoading ? (
-        <View style={styles.centered}>
-          <ActivityIndicator size="large" color={C.accent} />
-        </View>
-      ) : (
-        <FlatList
-          data={filtered}
-          keyExtractor={(item) => String(item.id)}
-          contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 100 }}
-          refreshing={isFetching}
-          onRefresh={refetch}
-          showsVerticalScrollIndicator={false}
-          ListEmptyComponent={
-            <View style={styles.emptyState}>
-              <Feather name="calendar" size={40} color={C.border} />
-              <Text style={styles.emptyTitle}>No bookings found</Text>
-              <Text style={styles.emptyText}>Tap + to create your first booking</Text>
-            </View>
-          }
-          renderItem={({ item }) => <BookingCard booking={item} />}
-        />
-      )}
-
-      <Modal visible={showMonthPicker} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Select Month</Text>
-              <Pressable onPress={() => setShowMonthPicker(false)}>
-                <Feather name="x" size={22} color={C.text} />
-              </Pressable>
-            </View>
-            <View style={styles.yearRow}>
-              <Pressable onPress={() => setSelectedYear((y) => y - 1)}>
-                <Feather name="chevron-left" size={24} color={C.text} />
-              </Pressable>
-              <Text style={styles.yearText}>{selectedYear}</Text>
-              <Pressable onPress={() => setSelectedYear((y) => y + 1)}>
-                <Feather name="chevron-right" size={24} color={C.text} />
-              </Pressable>
-            </View>
-            <View style={styles.monthGrid}>
-              {MONTHS.map((m, i) => (
-                <Pressable
-                  key={m}
-                  style={[styles.monthCell, selectedMonth === i + 1 && styles.monthCellActive]}
-                  onPress={() => { setSelectedMonth(i + 1); setShowMonthPicker(false); }}
-                >
-                  <Text style={[styles.monthCellText, selectedMonth === i + 1 && styles.monthCellTextActive]}>{m}</Text>
-                </Pressable>
-              ))}
-            </View>
+      {
+    isLoading ? (
+      <View style={styles.centered}>
+        <ActivityIndicator size="large" color={C.accent} />
+      </View>
+    ) : (
+      <FlatList
+        data={filtered}
+        keyExtractor={(item) => String(item.id)}
+        contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 100 }}
+        refreshing={isFetching}
+        onRefresh={refetch}
+        showsVerticalScrollIndicator={false}
+        ListEmptyComponent={
+          <View style={styles.emptyState}>
+            <Feather name="calendar" size={40} color={C.border} />
+            <Text style={styles.emptyTitle}>No bookings found</Text>
+            <Text style={styles.emptyText}>Tap + to create your first booking</Text>
           </View>
+        }
+        renderItem={({ item }) => <BookingCard booking={item} />}
+      />
+    )
+  }
+
+  <Modal visible={showMonthPicker} animationType="slide" transparent>
+    <View style={styles.modalOverlay}>
+      <View style={styles.modalContent}>
+        <View style={styles.modalHeader}>
+          <Text style={styles.modalTitle}>Select Month</Text>
+          <Pressable onPress={() => setShowMonthPicker(false)}>
+            <Feather name="x" size={22} color={C.text} />
+          </Pressable>
         </View>
-      </Modal>
+        <View style={styles.yearRow}>
+          <Pressable onPress={() => setSelectedYear((y) => y - 1)}>
+            <Feather name="chevron-left" size={24} color={C.text} />
+          </Pressable>
+          <Text style={styles.yearText}>{selectedYear}</Text>
+          <Pressable onPress={() => setSelectedYear((y) => y + 1)}>
+            <Feather name="chevron-right" size={24} color={C.text} />
+          </Pressable>
+        </View>
+        <View style={styles.monthGrid}>
+          {MONTHS.map((m, i) => (
+            <Pressable
+              key={m}
+              style={[styles.monthCell, selectedMonth === i + 1 && styles.monthCellActive]}
+              onPress={() => { setSelectedMonth(i + 1); setShowMonthPicker(false); }}
+            >
+              <Text style={[styles.monthCellText, selectedMonth === i + 1 && styles.monthCellTextActive]}>{m}</Text>
+            </Pressable>
+          ))}
+        </View>
+      </View>
     </View>
+  </Modal>
+    </View >
   );
 }
 
@@ -252,7 +254,6 @@ const styles = StyleSheet.create({
   searchWrap: { flexDirection: "row", alignItems: "center", backgroundColor: C.surface, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, gap: 8, borderWidth: 1, borderColor: C.border },
   searchInput: { flex: 1, fontFamily: "Inter_400Regular", fontSize: 14, color: C.text },
   statusRow: { flexDirection: "row", gap: 8, paddingHorizontal: 16, marginBottom: 4 },
-  filterRow: { flexDirection: "row", gap: 8, paddingHorizontal: 16, marginBottom: 4 },
   filterChip: { borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: C.surfaceSecondary },
   filterChipActive: { backgroundColor: C.primary },
   filterChipText: { fontFamily: "Inter_500Medium", fontSize: 12, color: C.textSecondary },
