@@ -79,7 +79,7 @@ router.put("/:id", requireAuth, async (req, res) => {
 
 router.delete("/:id", requireAuth, async (req, res) => {
   try {
-    await db.delete(agenciesTable).where(eq(agenciesTable.id, parseInt(req.params.id)));
+    await db.delete(agenciesTable).where(eq(agenciesTable.id, parseInt(req.params.id as string)));
     res.status(204).send();
   } catch (error) {
     console.error(error);
