@@ -49,7 +49,7 @@ router.post("/", requireAuth, async (req, res) => {
 
 router.get("/:id", requireAuth, async (req, res) => {
   try {
-    const [agency] = await db.select().from(agenciesTable).where(eq(agenciesTable.id, parseInt(req.params.id)));
+    const [agency] = await db.select().from(agenciesTable).where(eq(agenciesTable.id, parseInt(req.params.id as string)));
     if (!agency) { res.status(404).json({ error: "Not Found" }); return; }
     res.json(agency);
   } catch (error) {
@@ -64,7 +64,7 @@ router.put("/:id", requireAuth, async (req, res) => {
     const [agency] = await db
       .update(agenciesTable)
       .set({ name, contactEmail: contactEmail ?? null, contactPhone: contactPhone ?? null })
-      .where(eq(agenciesTable.id, parseInt(req.params.id)))
+      .where(eq(agenciesTable.id, parseInt(req.params.id as string)))
       .returning();
     if (!agency) {
       res.status(404).json({ error: "Not Found" });
