@@ -17,7 +17,7 @@ router.get("/", requireAuth, async (req, res) => {
 
 router.get("/:id", requireAuth, async (req, res) => {
   try {
-    const [hotel] = await db.select().from(hotelsTable).where(eq(hotelsTable.id, parseInt(req.params.id)));
+    const [hotel] = await db.select().from(hotelsTable).where(eq(hotelsTable.id, parseInt(req.params.id as string)));
     if (!hotel) {
       res.status(404).json({ error: "Not Found" });
       return;
@@ -50,7 +50,7 @@ router.put("/:id", requireAuth, requireAdmin, async (req, res) => {
     const [hotel] = await db
       .update(hotelsTable)
       .set({ name, totalRooms })
-      .where(eq(hotelsTable.id, parseInt(req.params.id)))
+      .where(eq(hotelsTable.id, parseInt(req.params.id as string)))
       .returning();
     if (!hotel) {
       res.status(404).json({ error: "Not Found" });
@@ -65,7 +65,7 @@ router.put("/:id", requireAuth, requireAdmin, async (req, res) => {
 
 router.delete("/:id", requireAuth, requireAdmin, async (req, res) => {
   try {
-    await db.delete(hotelsTable).where(eq(hotelsTable.id, parseInt(req.params.id)));
+    await db.delete(hotelsTable).where(eq(hotelsTable.id, parseInt(req.params.id as string)));
     res.status(204).send();
   } catch (error) {
     console.error(error);
