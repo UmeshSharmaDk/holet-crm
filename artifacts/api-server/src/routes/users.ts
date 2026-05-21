@@ -80,7 +80,7 @@ router.get("/:id", requireAuth, requireAdmin, async (req, res) => {
     const [user] = await db
       .select({ id: usersTable.id, email: usersTable.email, name: usersTable.name, role: usersTable.role, hotelId: usersTable.hotelId, createdAt: usersTable.createdAt })
       .from(usersTable)
-      .where(eq(usersTable.id, parseInt(req.params.id)));
+      .where(eq(usersTable.id, parseInt(req.params.id as string)));
     if (!user) { res.status(404).json({ error: "Not Found" }); return; }
     let hotel = null;
     if (user.hotelId) {
@@ -107,7 +107,7 @@ router.put("/:id", requireAuth, requireAdmin, async (req, res) => {
     const [user] = await db
       .update(usersTable)
       .set(updateData)
-      .where(eq(usersTable.id, parseInt(req.params.id)))
+      .where(eq(usersTable.id, parseInt(req.params.id as string)))
       .returning({
         id: usersTable.id,
         email: usersTable.email,
@@ -137,7 +137,7 @@ router.put("/:id", requireAuth, requireAdmin, async (req, res) => {
 
 router.delete("/:id", requireAuth, requireAdmin, async (req, res) => {
   try {
-    await db.delete(usersTable).where(eq(usersTable.id, parseInt(req.params.id)));
+    await db.delete(usersTable).where(eq(usersTable.id, parseInt(req.params.id as string)));
     res.status(204).send();
   } catch (error) {
     console.error(error);
