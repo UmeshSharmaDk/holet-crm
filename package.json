@@ -1,5 +1,5 @@
 {
-  "name": "hotel-crm-workspace",
+  "name": "hotel-crm",
   "private": true,
   "scripts": {
     "preinstall": "sh -c 'rm -f package-lock.json yarn.lock; case \"$npm_config_user_agent\" in pnpm/*) ;; *) echo \"Use pnpm instead\" >&2; exit 1 ;; esac'",
