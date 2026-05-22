@@ -8,12 +8,9 @@ if (!rawPort) {
   );
 }
 
-const port = Number(rawPort);
+const PORT = process.env.PORT || 3000;
+const HOST = '0.0.0.0'; // Strictly required for Render
 
-if (Number.isNaN(port) || port <= 0) {
-  throw new Error(`Invalid PORT value: "${rawPort}"`);
-}
-
-app.listen(port, () => {
-  console.log(`Server listening on port ${port}`);
+app.listen(PORT as number, HOST, () => {
+  console.log(`Server is running on http://${HOST}:${PORT}`);
 });
