@@ -147,6 +147,7 @@ async function startMetro(expoPublicDomain, expoPublicReplId) {
       detached: false,
       cwd: projectRoot,
       env,
+      shell: process.platform === "win32",
     },
   );
 
