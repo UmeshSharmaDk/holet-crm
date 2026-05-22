@@ -2,6 +2,7 @@ import express, { type Express } from "express";
 import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
+import path from "path"; // Import path
 import router from "./routes";
 
 const app: Express = express();
@@ -38,15 +39,16 @@ app.use("/api", limiter);
 app.use(express.json({ limit: "5mb" }));
 app.use(express.urlencoded({ extended: true, limit: "5mb" }));
 
-// ADD THIS: Root Health Check Route
-app.get("/", (req, res) => {
-  res.status(200).json({
-    service: "Holet CRM API",
-    status: "Operational",
-    timestamp: new Date().toISOString()
-  });
-});
-
+// 1. Mount API Routes first
 app.use("/api", router);
+
+// 2. Serve the static frontend files (e.g., from mockup-sandbox)
+const frontendPath = path.join(__dirname, "../../mockup-sandbox/dist");
+app.use(express.static(frontendPath));
+
+// 3. Fallback: send all non-API requests to the React index.html to support client-side routing
+app.get("*", (req, res) => {
+  res.sendFile(path.join(frontendPath, "index.html"));
+});
 
 export default app;
