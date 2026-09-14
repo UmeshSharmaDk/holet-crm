@@ -1,10 +1,13 @@
-import { pgTable, serial, text, integer, timestamp, date, numeric, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, integer, timestamp, date, numeric, pgEnum, customType } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { hotelsTable } from "./hotels";
 import { agenciesTable } from "./agencies";
 
 export const bookingStatusEnum = pgEnum("booking_status", ["confirmed", "checked_in", "checked_out", "cancelled"]);
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({
+  dataType: () => "bytea",
+});
 
 export const bookingsTable = pgTable("bookings", {
   id: serial("id").primaryKey(),
@@ -28,6 +31,24 @@ export const bookingsTable = pgTable("bookings", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
+export const bookingGuestsTable = pgTable("booking_guests", {
+  id: serial("id").primaryKey(),
+  bookingId: integer("booking_id").notNull().references(() => bookingsTable.id, { onDelete: "cascade" }),
+  personIndex: integer("person_index").notNull(),
+  name: text("name").notNull(),
+  dateOfBirth: date("date_of_birth"),
+  relation: text("relation").notNull(),
+  frontIdData: bytea("front_id_data"),
+  frontIdMimeType: text("front_id_mime_type"),
+  frontIdName: text("front_id_name"),
+  backIdData: bytea("back_id_data"),
+  backIdMimeType: text("back_id_mime_type"),
+  backIdName: text("back_id_name"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
 export const insertBookingSchema = createInsertSchema(bookingsTable).omit({ id: true, createdAt: true, updatedAt: true, totalCost: true, balance: true });
 export type InsertBooking = z.infer<typeof insertBookingSchema>;
 export type Booking = typeof bookingsTable.$inferSelect;
+export type BookingGuest = typeof bookingGuestsTable.$inferSelect;

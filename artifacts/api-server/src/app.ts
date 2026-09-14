@@ -7,16 +7,26 @@ import router from "./routes";
 const app: Express = express();
 
 app.use(helmet());
+app.set("trust proxy", 1);
 
+const proxyDomains = [
+  process.env.REPLIT_DEV_DOMAIN,
+  ...(process.env.REPLIT_DOMAINS ?? "").split(","),
+]
+  .filter((domain): domain is string => Boolean(domain))
+  .map((domain) => domain.startsWith("http") ? domain : `https://${domain}`);
 const allowedOrigins = [
   "https://crm.outhillsmanali.com",
+  ...proxyDomains,
   ...(process.env.NODE_ENV !== "production" ? ["http://localhost:3000", "http://localhost:8081"] : [])
 ];
 
 app.use(
   cors({
     origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin)) {
+      const isLocalPreview = process.env.NODE_ENV !== "production" && !!origin && /^http:\/\/localhost:\d+$/.test(origin);
+      const isReplitPreview = process.env.NODE_ENV !== "production" && !!origin && /^https?:\/\/[^/]+\.replit\.dev(?::\d+)?$/.test(origin);
+      if (!origin || allowedOrigins.includes(origin) || isLocalPreview || isReplitPreview) {
         callback(null, true);
       } else {
         callback(new Error("Not allowed by CORS"));

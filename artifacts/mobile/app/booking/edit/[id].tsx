@@ -18,6 +18,14 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Colors from "@/constants/colors";
 import { api } from "@/lib/api";
 import { DatePickerField } from "@/components/DatePickerField";
+import {
+  BookingGuestsForm,
+  BookingGuestsState,
+  bookingGuestsFromBooking,
+  bookingGuestsToFormData,
+  resizeBookingGuests,
+  validateBookingGuests,
+} from "@/components/BookingGuestsForm";
 
 const C = Colors.light;
 
@@ -46,6 +54,14 @@ interface Booking {
   status: string;
   notes: string | null;
   agencyId: number | null;
+  guests?: Array<{
+    personIndex: number;
+    name: string;
+    dateOfBirth: string | null;
+    relation: string;
+    hasFrontId: boolean;
+    hasBackId: boolean;
+  }>;
 }
 
 interface Agency { id: number; name: string; }
@@ -70,6 +86,8 @@ export default function EditBookingScreen() {
     status: "confirmed",
     agencyId: "",
   });
+  const [guestDetails, setGuestDetails] = useState<BookingGuestsState>({ persons: [], idSlots: [] });
+  const [savingGuestDetails, setSavingGuestDetails] = useState(false);
 
   const { data: booking, isLoading } = useQuery<Booking>({
     queryKey: ["booking", id],
@@ -99,21 +117,34 @@ export default function EditBookingScreen() {
         status: booking.status,
         agencyId: booking.agencyId ? String(booking.agencyId) : "",
       });
+      setGuestDetails(bookingGuestsFromBooking(booking.numberOfPersons ?? 1, booking.guests));
     }
   }, [booking]);
 
   const mutation = useMutation({
     mutationFn: (data: any) => api.put(`/bookings/${id}`, data),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["booking", id] });
-      qc.invalidateQueries({ queryKey: ["bookings"] });
-      router.back();
+    onSuccess: async () => {
+      try {
+        setSavingGuestDetails(true);
+        await api.upload(`/bookings/${id}/guests`, bookingGuestsToFormData(guestDetails, form.guestName));
+        qc.invalidateQueries({ queryKey: ["booking", id] });
+        qc.invalidateQueries({ queryKey: ["bookings"] });
+        router.back();
+      } catch (error: any) {
+        Alert.alert("Booking updated", error.message ?? "Booking saved, but guest details could not be uploaded.");
+        router.back();
+      } finally {
+        setSavingGuestDetails(false);
+      }
     },
     onError: (e: any) => Alert.alert("Error", e.message),
   });
 
   function update(field: keyof typeof form, value: string) {
     setForm((f) => ({ ...f, [field]: value }));
+    if (field === "numberOfPersons") {
+      setGuestDetails((current) => resizeBookingGuests(current, parseInt(value, 10) || 1));
+    }
   }
 
   const roomRent = parseFloat(form.roomRent) || 0;
@@ -124,6 +155,8 @@ export default function EditBookingScreen() {
 
   function submit() {
     if (!form.guestName.trim()) { Alert.alert("Error", "Guest name is required"); return; }
+    const guestError = validateBookingGuests(guestDetails, form.guestName);
+    if (guestError) { Alert.alert("Guest details", guestError); return; }
     mutation.mutate({
       guestName: form.guestName.trim(),
       guestEmail: form.guestEmail.trim() || null,
@@ -166,6 +199,13 @@ export default function EditBookingScreen() {
             <FormField label="Number of Rooms" value={form.numberOfRooms} onChangeText={(v: string) => update("numberOfRooms", v)} placeholder="1" keyboardType="numeric" flex />
             <FormField label="Number of Persons" value={form.numberOfPersons} onChangeText={(v: string) => update("numberOfPersons", v)} placeholder="1" keyboardType="numeric" flex />
           </Row>
+
+          <SectionHeader title="Guest Profiles" />
+          <BookingGuestsForm
+            mainGuestName={form.guestName}
+            value={guestDetails}
+            onChange={setGuestDetails}
+          />
 
           <SectionHeader title="Dates" />
           <DatePickerField
@@ -230,11 +270,11 @@ export default function EditBookingScreen() {
           />
 
           <Pressable
-            style={({ pressed }) => [styles.submitBtn, pressed && { opacity: 0.85 }, mutation.isPending && { opacity: 0.6 }]}
+             style={({ pressed }) => [styles.submitBtn, pressed && { opacity: 0.85 }, (mutation.isPending || savingGuestDetails) && { opacity: 0.6 }]}
             onPress={submit}
-            disabled={mutation.isPending}
+             disabled={mutation.isPending || savingGuestDetails}
           >
-            {mutation.isPending
+             {mutation.isPending || savingGuestDetails
               ? <ActivityIndicator color="#fff" size="small" />
               : <Text style={styles.submitText}>Save Changes</Text>}
           </Pressable>

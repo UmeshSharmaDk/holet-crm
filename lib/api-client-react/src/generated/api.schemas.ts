@@ -113,6 +113,16 @@ export const BookingStatus = {
   cancelled: "cancelled",
 } as const;
 
+export interface BookingGuest {
+  id: number;
+  personIndex: number;
+  name: string;
+  dateOfBirth?: string | null;
+  relation: string;
+  hasFrontId: boolean;
+  hasBackId: boolean;
+}
+
 export interface Booking {
   id: number;
   guestName: string;
@@ -133,8 +143,14 @@ export interface Booking {
   agencyId?: number | null;
   agency?: Agency | null;
   hotel?: Hotel | null;
+  guests?: BookingGuest[];
   createdAt: string;
   updatedAt: string;
+}
+
+export interface BookingGuestsRequest {
+  /** JSON encoded guest details; ID files are sent as multipart fields. */
+  guests: string;
 }
 
 export type CreateBookingRequestStatus =
@@ -242,6 +258,12 @@ export type ListBookingsParams = {
   year?: number;
   hotelId?: number;
   date?: string;
+};
+
+export type SaveBookingGuestsBody = {
+  /** JSON encoded guest details. */
+  guests: string;
+  [key: string]: unknown;
 };
 
 export type GetDashboardStatsParams = {

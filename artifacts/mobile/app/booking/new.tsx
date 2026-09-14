@@ -19,6 +19,14 @@ import Colors from "@/constants/colors";
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api";
 import { DatePickerField } from "@/components/DatePickerField";
+import {
+  BookingGuestsForm,
+  BookingGuestsState,
+  bookingGuestsToFormData,
+  emptyBookingGuests,
+  resizeBookingGuests,
+  validateBookingGuests,
+} from "@/components/BookingGuestsForm";
 
 const C = Colors.light;
 
@@ -46,6 +54,8 @@ export default function NewBookingScreen() {
     status: "confirmed" as "confirmed" | "checked_in",
     agencyId: "" as string,
   });
+  const [guestDetails, setGuestDetails] = useState<BookingGuestsState>(() => emptyBookingGuests(1));
+  const [savingGuestDetails, setSavingGuestDetails] = useState(false);
 
   const { data: agencies } = useQuery<Agency[]>({
     queryKey: ["agencies"],
@@ -54,10 +64,19 @@ export default function NewBookingScreen() {
 
   const createMutation = useMutation({
     mutationFn: (data: any) => api.post("/bookings", data),
-    onSuccess: (booking: any) => {
-      qc.invalidateQueries({ queryKey: ["bookings"] });
-      qc.invalidateQueries({ queryKey: ["dashboard-stats"] });
-      router.replace(`/booking/${booking.id}` as any);
+    onSuccess: async (booking: any) => {
+      try {
+        setSavingGuestDetails(true);
+        await api.upload(`/bookings/${booking.id}/guests`, bookingGuestsToFormData(guestDetails, form.guestName));
+        qc.invalidateQueries({ queryKey: ["bookings"] });
+        qc.invalidateQueries({ queryKey: ["dashboard-stats"] });
+        router.replace(`/booking/${booking.id}` as any);
+      } catch (error: any) {
+        Alert.alert("Booking created", error.message ?? "Booking saved, but guest details could not be uploaded.");
+        router.replace(`/booking/${booking.id}` as any);
+      } finally {
+        setSavingGuestDetails(false);
+      }
     },
     onError: (e: any) => Alert.alert("Error", e.message),
   });
@@ -79,6 +98,8 @@ export default function NewBookingScreen() {
     if (!form.guestName.trim()) { Alert.alert("Error", "Guest name is required"); return; }
     if (!form.checkIn || !form.checkOut) { Alert.alert("Error", "Dates are required"); return; }
     if (!form.roomRent) { Alert.alert("Error", "Room rent is required"); return; }
+    const guestError = validateBookingGuests(guestDetails, form.guestName);
+    if (guestError) { Alert.alert("Guest details", guestError); return; }
 
     createMutation.mutate({
       guestName: form.guestName.trim(),
@@ -100,6 +121,9 @@ export default function NewBookingScreen() {
 
   function update(field: keyof typeof form, value: string) {
     setForm((f) => ({ ...f, [field]: value }));
+    if (field === "numberOfPersons") {
+      setGuestDetails((current) => resizeBookingGuests(current, parseInt(value, 10) || 1));
+    }
   }
 
   return (
@@ -131,6 +155,13 @@ export default function NewBookingScreen() {
             <FormField label="Number of Persons" value={form.numberOfPersons} onChangeText={(v: string) => update("numberOfPersons", v)} placeholder="1" keyboardType="numeric" />
           </View>
         </View>
+
+        <SectionHeader title="Guest Profiles" />
+        <BookingGuestsForm
+          mainGuestName={form.guestName}
+          value={guestDetails}
+          onChange={setGuestDetails}
+        />
 
         <SectionHeader title="Dates" />
         <DatePickerField
@@ -225,11 +256,11 @@ export default function NewBookingScreen() {
         </View>
 
         <Pressable
-          style={({ pressed }) => [styles.submitBtn, pressed && { opacity: 0.85 }, createMutation.isPending && { opacity: 0.6 }]}
+           style={({ pressed }) => [styles.submitBtn, pressed && { opacity: 0.85 }, (createMutation.isPending || savingGuestDetails) && { opacity: 0.6 }]}
           onPress={submit}
-          disabled={createMutation.isPending}
+           disabled={createMutation.isPending || savingGuestDetails}
         >
-          {createMutation.isPending
+           {createMutation.isPending || savingGuestDetails
             ? <ActivityIndicator color="#fff" size="small" />
             : <><Feather name="plus" size={20} color="#fff" /><Text style={styles.submitText}>Create Booking</Text></>}
         </Pressable>

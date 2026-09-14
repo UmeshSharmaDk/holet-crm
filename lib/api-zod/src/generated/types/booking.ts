@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { Agency } from "./agency";
+import type { BookingGuest } from "./bookingGuest";
 import type { BookingStatus } from "./bookingStatus";
 import type { Hotel } from "./hotel";
 
@@ -29,6 +30,7 @@ export interface Booking {
   agencyId?: number | null;
   agency?: Agency | null;
   hotel?: Hotel | null;
+  guests?: BookingGuest[];
   createdAt: Date;
   updatedAt: Date;
 }

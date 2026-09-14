@@ -291,6 +291,19 @@ export const ListBookingsResponseItem = zod.object({
       createdAt: zod.date(),
     })
     .nullish(),
+  guests: zod
+    .array(
+      zod.object({
+        id: zod.number(),
+        personIndex: zod.number(),
+        name: zod.string(),
+        dateOfBirth: zod.date().nullish(),
+        relation: zod.string(),
+        hasFrontId: zod.boolean(),
+        hasBackId: zod.boolean(),
+      }),
+    )
+    .optional(),
   createdAt: zod.date(),
   updatedAt: zod.date(),
 });
@@ -359,6 +372,19 @@ export const GetBookingResponse = zod.object({
       createdAt: zod.date(),
     })
     .nullish(),
+  guests: zod
+    .array(
+      zod.object({
+        id: zod.number(),
+        personIndex: zod.number(),
+        name: zod.string(),
+        dateOfBirth: zod.date().nullish(),
+        relation: zod.string(),
+        hasFrontId: zod.boolean(),
+        hasBackId: zod.boolean(),
+      }),
+    )
+    .optional(),
   createdAt: zod.date(),
   updatedAt: zod.date(),
 });
@@ -424,6 +450,19 @@ export const UpdateBookingResponse = zod.object({
       createdAt: zod.date(),
     })
     .nullish(),
+  guests: zod
+    .array(
+      zod.object({
+        id: zod.number(),
+        personIndex: zod.number(),
+        name: zod.string(),
+        dateOfBirth: zod.date().nullish(),
+        relation: zod.string(),
+        hasFrontId: zod.boolean(),
+        hasBackId: zod.boolean(),
+      }),
+    )
+    .optional(),
   createdAt: zod.date(),
   updatedAt: zod.date(),
 });
@@ -482,8 +521,32 @@ export const UpdatePaymentResponse = zod.object({
       createdAt: zod.date(),
     })
     .nullish(),
+  guests: zod
+    .array(
+      zod.object({
+        id: zod.number(),
+        personIndex: zod.number(),
+        name: zod.string(),
+        dateOfBirth: zod.date().nullish(),
+        relation: zod.string(),
+        hasFrontId: zod.boolean(),
+        hasBackId: zod.boolean(),
+      }),
+    )
+    .optional(),
   createdAt: zod.date(),
   updatedAt: zod.date(),
+});
+
+/**
+ * @summary Save guest profiles and identity documents for a booking
+ */
+export const SaveBookingGuestsParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const SaveBookingGuestsBody = zod.object({
+  guests: zod.string().describe("JSON encoded guest details."),
 });
 
 /**
@@ -546,6 +609,19 @@ export const GetTodayCheckinsResponseItem = zod.object({
       createdAt: zod.date(),
     })
     .nullish(),
+  guests: zod
+    .array(
+      zod.object({
+        id: zod.number(),
+        personIndex: zod.number(),
+        name: zod.string(),
+        dateOfBirth: zod.date().nullish(),
+        relation: zod.string(),
+        hasFrontId: zod.boolean(),
+        hasBackId: zod.boolean(),
+      }),
+    )
+    .optional(),
   createdAt: zod.date(),
   updatedAt: zod.date(),
 });
@@ -594,6 +670,19 @@ export const GetTodayCheckoutsResponseItem = zod.object({
       createdAt: zod.date(),
     })
     .nullish(),
+  guests: zod
+    .array(
+      zod.object({
+        id: zod.number(),
+        personIndex: zod.number(),
+        name: zod.string(),
+        dateOfBirth: zod.date().nullish(),
+        relation: zod.string(),
+        hasFrontId: zod.boolean(),
+        hasBackId: zod.boolean(),
+      }),
+    )
+    .optional(),
   createdAt: zod.date(),
   updatedAt: zod.date(),
 });

@@ -479,6 +479,40 @@ paths:
               schema:
                 $ref: "#/components/schemas/Booking"
 
+  /bookings/{id}/guests:
+    post:
+      operationId: saveBookingGuests
+      tags: [bookings]
+      summary: Save guest profiles and identity documents for a booking
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                guests:
+                  type: string
+                  description: JSON encoded guest details.
+              additionalProperties: true
+              required:
+                - guests
+      responses:
+        "201":
+          description: Guest profiles saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Booking"
+
   /dashboard/stats:
     get:
       operationId: getDashboardStats
@@ -833,6 +867,10 @@ components:
         hotel:
           $ref: "#/components/schemas/Hotel"
           nullable: true
+        guests:
+          type: array
+          items:
+            $ref: "#/components/schemas/BookingGuest"
         createdAt:
           type: string
           format: date-time
@@ -853,6 +891,42 @@ components:
         - hotelId
         - createdAt
         - updatedAt
+
+    BookingGuest:
+      type: object
+      properties:
+        id:
+          type: integer
+        personIndex:
+          type: integer
+        name:
+          type: string
+        dateOfBirth:
+          type: string
+          format: date
+          nullable: true
+        relation:
+          type: string
+        hasFrontId:
+          type: boolean
+        hasBackId:
+          type: boolean
+      required:
+        - id
+        - personIndex
+        - name
+        - relation
+        - hasFrontId
+        - hasBackId
+
+    BookingGuestsRequest:
+      type: object
+      properties:
+        guests:
+          type: string
+          description: JSON encoded guest details; ID files are sent as multipart fields.
+      required:
+        - guests
 
     CreateBookingRequest:
       type: object

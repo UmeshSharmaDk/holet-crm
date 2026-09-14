@@ -38,6 +38,15 @@ interface Booking {
   agencyId: number | null;
   agency?: { id: number; name: string } | null;
   hotel?: { id: number; name: string; totalRooms: number } | null;
+  guests?: Array<{
+    id: number;
+    personIndex: number;
+    name: string;
+    dateOfBirth: string | null;
+    relation: string;
+    hasFrontId: boolean;
+    hasBackId: boolean;
+  }>;
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -161,6 +170,38 @@ export default function BookingDetailScreen() {
           {booking.notes && <InfoRow icon="file-text" label="Notes" value={booking.notes} />}
         </View>
 
+        {!!booking.guests?.length && (
+          <View style={styles.peopleCard}>
+            <View style={styles.peopleHeader}>
+              <View>
+                <Text style={styles.peopleTitle}>Guest profiles</Text>
+                <Text style={styles.peopleSubtitle}>{booking.guests.length} person{booking.guests.length === 1 ? "" : "s"} on this booking</Text>
+              </View>
+              <Feather name="users" size={20} color={C.accent} />
+            </View>
+            {booking.guests.map((guest) => (
+              <View key={guest.id} style={styles.personRow}>
+                <View style={styles.personAvatar}>
+                  <Text style={styles.personAvatarText}>{guest.name.charAt(0).toUpperCase()}</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.personRowName}>{guest.name}</Text>
+                  <Text style={styles.personRowMeta}>
+                    {guest.personIndex === 0 ? "Main guest" : guest.relation}
+                    {guest.dateOfBirth ? ` · DOB ${formatDate(guest.dateOfBirth)}` : ""}
+                  </Text>
+                </View>
+                <View style={styles.documentStatus}>
+                  <Feather name={guest.hasFrontId && guest.hasBackId ? "check-circle" : "alert-circle"} size={16} color={guest.hasFrontId && guest.hasBackId ? C.success : C.warning} />
+                  <Text style={[styles.documentStatusText, { color: guest.hasFrontId && guest.hasBackId ? C.success : C.warning }]}>
+                    {guest.hasFrontId && guest.hasBackId ? "ID complete" : "ID pending"}
+                  </Text>
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
+
         <View style={styles.financialCard}>
           <Text style={styles.financialTitle}>Financial Summary</Text>
           <FinRow label="Room Rent" value={`₹${booking.roomRent.toFixed(2)}`} />
@@ -241,6 +282,17 @@ const styles = StyleSheet.create({
   infoRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   infoLabel: { fontFamily: "Inter_500Medium", fontSize: 13, color: C.textSecondary, width: 64 },
   infoValue: { fontFamily: "Inter_500Medium", fontSize: 13, color: C.text, flex: 1 },
+  peopleCard: { backgroundColor: C.surface, borderRadius: 16, padding: 16, marginBottom: 12, shadowColor: C.shadow, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 1, shadowRadius: 8, elevation: 2 },
+  peopleHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6 },
+  peopleTitle: { fontFamily: "Inter_700Bold", fontSize: 16, color: C.text },
+  peopleSubtitle: { fontFamily: "Inter_400Regular", fontSize: 12, color: C.textSecondary, marginTop: 3 },
+  personRow: { flexDirection: "row", alignItems: "center", gap: 10, borderTopWidth: 1, borderTopColor: C.border, paddingVertical: 12 },
+  personAvatar: { width: 34, height: 34, borderRadius: 17, backgroundColor: C.accentLight, alignItems: "center", justifyContent: "center" },
+  personAvatarText: { fontFamily: "Inter_700Bold", fontSize: 13, color: C.accent },
+  personRowName: { fontFamily: "Inter_600SemiBold", fontSize: 13, color: C.text },
+  personRowMeta: { fontFamily: "Inter_400Regular", fontSize: 11, color: C.textSecondary, marginTop: 3 },
+  documentStatus: { alignItems: "flex-end", gap: 3 },
+  documentStatusText: { fontFamily: "Inter_600SemiBold", fontSize: 10 },
   financialCard: { backgroundColor: C.surface, borderRadius: 16, padding: 16, marginBottom: 16, shadowColor: C.shadow, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 1, shadowRadius: 8, elevation: 2 },
   financialTitle: { fontFamily: "Inter_700Bold", fontSize: 16, color: C.text, marginBottom: 14 },
   finRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 6 },

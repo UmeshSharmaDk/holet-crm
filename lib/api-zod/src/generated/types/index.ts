@@ -8,6 +8,8 @@
 
 export * from "./agency";
 export * from "./booking";
+export * from "./bookingGuest";
+export * from "./bookingGuestsRequest";
 export * from "./bookingStatus";
 export * from "./createAgencyRequest";
 export * from "./createBookingRequest";
@@ -32,6 +34,7 @@ export * from "./occupancyStatsDailyOccupancyItem";
 export * from "./revenueStats";
 export * from "./revenueStatsAgencyRevenueItem";
 export * from "./revenueStatsMonthlyRevenueItem";
+export * from "./saveBookingGuestsBody";
 export * from "./updateBookingRequest";
 export * from "./updateBookingRequestStatus";
 export * from "./updatePaymentRequest";

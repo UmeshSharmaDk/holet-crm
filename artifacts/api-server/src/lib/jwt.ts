@@ -1,10 +1,10 @@
 import jwt from "jsonwebtoken";
 
 // Cast to string so TypeScript knows it is never undefined
-const JWT_SECRET = process.env["JWT_SECRET"] as string;
+const JWT_SECRET = (process.env["JWT_SECRET"] ?? process.env["SESSION_SECRET"]) as string;
 
 if (!JWT_SECRET) {
-  throw new Error("FATAL: JWT_SECRET environment variable is missing.");
+  throw new Error("FATAL: JWT_SECRET or SESSION_SECRET environment variable is missing.");
 }
 
 export interface JWTPayload {

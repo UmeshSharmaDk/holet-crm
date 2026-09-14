@@ -37,6 +37,7 @@ import type {
   LoginResponse,
   OccupancyStats,
   RevenueStats,
+  SaveBookingGuestsBody,
   UpdateBookingRequest,
   UpdatePaymentRequest,
   UpdateUserRequest,
@@ -1868,6 +1869,95 @@ export const useUpdatePayment = <
   TContext
 > => {
   return useMutation(getUpdatePaymentMutationOptions(options));
+};
+
+/**
+ * @summary Save guest profiles and identity documents for a booking
+ */
+export const getSaveBookingGuestsUrl = (id: number) => {
+  return `/api/bookings/${id}/guests`;
+};
+
+export const saveBookingGuests = async (
+  id: number,
+  saveBookingGuestsBody: SaveBookingGuestsBody,
+  options?: RequestInit,
+): Promise<Booking> => {
+  const formData = new FormData();
+  formData.append(`guests`, saveBookingGuestsBody.guests);
+
+  return customFetch<Booking>(getSaveBookingGuestsUrl(id), {
+    ...options,
+    method: "POST",
+    body: formData,
+  });
+};
+
+export const getSaveBookingGuestsMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof saveBookingGuests>>,
+    TError,
+    { id: number; data: BodyType<SaveBookingGuestsBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof saveBookingGuests>>,
+  TError,
+  { id: number; data: BodyType<SaveBookingGuestsBody> },
+  TContext
+> => {
+  const mutationKey = ["saveBookingGuests"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof saveBookingGuests>>,
+    { id: number; data: BodyType<SaveBookingGuestsBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return saveBookingGuests(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SaveBookingGuestsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof saveBookingGuests>>
+>;
+export type SaveBookingGuestsMutationBody = BodyType<SaveBookingGuestsBody>;
+export type SaveBookingGuestsMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Save guest profiles and identity documents for a booking
+ */
+export const useSaveBookingGuests = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof saveBookingGuests>>,
+    TError,
+    { id: number; data: BodyType<SaveBookingGuestsBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof saveBookingGuests>>,
+  TError,
+  { id: number; data: BodyType<SaveBookingGuestsBody> },
+  TContext
+> => {
+  return useMutation(getSaveBookingGuestsMutationOptions(options));
 };
 
 /**
