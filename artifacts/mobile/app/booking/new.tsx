@@ -4,6 +4,8 @@ import React, { useState, useMemo } from "react";
 import {
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -16,6 +18,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Colors from "@/constants/colors";
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api";
+import { DatePickerField } from "@/components/DatePickerField";
 
 const C = Colors.light;
 
@@ -32,8 +35,8 @@ export default function NewBookingScreen() {
     guestName: "",
     guestEmail: "",
     guestPhone: "",
-    roomNumber: "",
-    roomType: "",
+    numberOfRooms: "1",
+    numberOfPersons: "1",
     checkIn: today,
     checkOut: tomorrow,
     roomRent: "",
@@ -81,8 +84,8 @@ export default function NewBookingScreen() {
       guestName: form.guestName.trim(),
       guestEmail: form.guestEmail.trim() || null,
       guestPhone: form.guestPhone.trim() || null,
-      roomNumber: form.roomNumber.trim() || null,
-      roomType: form.roomType.trim() || null,
+      numberOfRooms: parseInt(form.numberOfRooms) || 1,
+      numberOfPersons: parseInt(form.numberOfPersons) || 1,
       checkIn: form.checkIn,
       checkOut: form.checkOut,
       roomRent,
@@ -100,6 +103,10 @@ export default function NewBookingScreen() {
   }
 
   return (
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+    >
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.topBar}>
         <Pressable onPress={() => router.back()} style={styles.backBtn}>
@@ -111,29 +118,32 @@ export default function NewBookingScreen() {
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 20 }]} showsVerticalScrollIndicator={false}>
 
         <SectionHeader title="Guest Information" />
-        <FormField label="Guest Name *" value={form.guestName} onChangeText={(v) => update("guestName", v)} placeholder="John Smith" />
-        <FormField label="Email" value={form.guestEmail} onChangeText={(v) => update("guestEmail", v)} placeholder="john@email.com" keyboardType="email-address" />
-        <FormField label="Phone" value={form.guestPhone} onChangeText={(v) => update("guestPhone", v)} placeholder="+1 234 567 8900" keyboardType="phone-pad" />
+        <FormField label="Guest Name *" value={form.guestName} onChangeText={(v: string) => update("guestName", v)} placeholder="John Smith" />
+        <FormField label="Email" value={form.guestEmail} onChangeText={(v: string) => update("guestEmail", v)} placeholder="john@email.com" keyboardType="email-address" />
+        <FormField label="Phone" value={form.guestPhone} onChangeText={(v: string) => update("guestPhone", v)} placeholder="+1 234 567 8900" keyboardType="phone-pad" />
 
         <SectionHeader title="Room Details" />
         <View style={styles.row2}>
           <View style={{ flex: 1 }}>
-            <FormField label="Room Number" value={form.roomNumber} onChangeText={(v) => update("roomNumber", v)} placeholder="101" />
+            <FormField label="Number of Rooms" value={form.numberOfRooms} onChangeText={(v: string) => update("numberOfRooms", v)} placeholder="1" keyboardType="numeric" />
           </View>
           <View style={{ flex: 1 }}>
-            <FormField label="Room Type" value={form.roomType} onChangeText={(v) => update("roomType", v)} placeholder="Deluxe" />
+            <FormField label="Number of Persons" value={form.numberOfPersons} onChangeText={(v: string) => update("numberOfPersons", v)} placeholder="1" keyboardType="numeric" />
           </View>
         </View>
 
         <SectionHeader title="Dates" />
-        <View style={styles.row2}>
-          <View style={{ flex: 1 }}>
-            <FormField label="Check-In *" value={form.checkIn} onChangeText={(v) => update("checkIn", v)} placeholder="YYYY-MM-DD" />
-          </View>
-          <View style={{ flex: 1 }}>
-            <FormField label="Check-Out *" value={form.checkOut} onChangeText={(v) => update("checkOut", v)} placeholder="YYYY-MM-DD" />
-          </View>
-        </View>
+        <DatePickerField
+          label="Check-In *"
+          value={form.checkIn}
+          onChange={(v) => update("checkIn", v)}
+        />
+        <DatePickerField
+          label="Check-Out *"
+          value={form.checkOut}
+          onChange={(v) => update("checkOut", v)}
+          minimumDate={form.checkIn ? new Date(new Date(form.checkIn).getTime() + 86400000) : undefined}
+        />
         {nights > 0 && (
           <View style={styles.nightsBadge}>
             <Feather name="moon" size={14} color={C.accent} />
@@ -144,22 +154,22 @@ export default function NewBookingScreen() {
         <SectionHeader title="Financials" />
         <View style={styles.row2}>
           <View style={{ flex: 1 }}>
-            <FormField label="Room Rent ($) *" value={form.roomRent} onChangeText={(v) => update("roomRent", v)} placeholder="0.00" keyboardType="numeric" />
+            <FormField label="Room Rent (₹) *" value={form.roomRent} onChangeText={(v: string) => update("roomRent", v)} placeholder="0.00" keyboardType="numeric" />
           </View>
           <View style={{ flex: 1 }}>
-            <FormField label="Add-ons ($)" value={form.addOns} onChangeText={(v) => update("addOns", v)} placeholder="0.00" keyboardType="numeric" />
+            <FormField label="Add-ons (₹)" value={form.addOns} onChangeText={(v: string) => update("addOns", v)} placeholder="0.00" keyboardType="numeric" />
           </View>
         </View>
-        <FormField label="Receipt ($)" value={form.receipt} onChangeText={(v) => update("receipt", v)} placeholder="0.00" keyboardType="numeric" />
+        <FormField label="Receipt (₹)" value={form.receipt} onChangeText={(v: string) => update("receipt", v)} placeholder="0.00" keyboardType="numeric" />
 
         <View style={styles.calcCard}>
           <View style={styles.calcRow}>
             <Text style={styles.calcLabel}>Total Cost</Text>
-            <Text style={styles.calcValue}>${totalCost.toFixed(2)}</Text>
+            <Text style={styles.calcValue}>₹{totalCost.toFixed(2)}</Text>
           </View>
           <View style={styles.calcRow}>
             <Text style={styles.calcLabel}>Balance Due</Text>
-            <Text style={[styles.calcValue, { color: balance > 0 ? C.danger : C.success }]}>${balance.toFixed(2)}</Text>
+            <Text style={[styles.calcValue, { color: balance > 0 ? C.danger : C.success }]}>₹{balance.toFixed(2)}</Text>
           </View>
         </View>
 
@@ -205,7 +215,7 @@ export default function NewBookingScreen() {
           <TextInput
             style={styles.textArea}
             value={form.notes}
-            onChangeText={(v) => update("notes", v)}
+            onChangeText={(v: string) => update("notes", v)}
             placeholder="Special requests, notes..."
             placeholderTextColor={C.textSecondary}
             multiline
@@ -225,6 +235,7 @@ export default function NewBookingScreen() {
         </Pressable>
       </ScrollView>
     </View>
+    </KeyboardAvoidingView>
   );
 }
 

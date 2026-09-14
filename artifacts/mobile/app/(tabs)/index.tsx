@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery } from "@tanstack/react-query";
 import Colors from "@/constants/colors";
 import { useAuth } from "@/context/AuthContext";
+import { HotelPicker, useEffectiveHotelId } from "@/components/HotelPicker";
 import { api } from "@/lib/api";
 
 const C = Colors.light;
@@ -31,8 +32,8 @@ interface DashboardStats {
 interface Booking {
   id: number;
   guestName: string;
-  roomNumber: string | null;
-  roomType: string | null;
+  numberOfRooms: number;
+  numberOfPersons: number;
   checkIn: string;
   checkOut: string;
   status: string;
@@ -43,21 +44,21 @@ interface Booking {
 export default function DashboardScreen() {
   const { user, logout } = useAuth();
   const insets = useSafeAreaInsets();
-
-  const hotelParam = user?.role !== "admin" && user?.hotelId ? `?hotelId=${user.hotelId}` : "";
+  const effectiveHotelId = useEffectiveHotelId();
+  const hotelParam = effectiveHotelId ? `?hotelId=${effectiveHotelId}` : "";
 
   const statsQuery = useQuery<DashboardStats>({
-    queryKey: ["dashboard-stats", user?.hotelId],
+    queryKey: ["dashboard-stats", effectiveHotelId],
     queryFn: () => api.get<DashboardStats>(`/dashboard/stats${hotelParam}`),
   });
 
   const checkinsQuery = useQuery<Booking[]>({
-    queryKey: ["dashboard-checkins", user?.hotelId],
+    queryKey: ["dashboard-checkins", effectiveHotelId],
     queryFn: () => api.get<Booking[]>(`/dashboard/checkins${hotelParam}`),
   });
 
   const checkoutsQuery = useQuery<Booking[]>({
-    queryKey: ["dashboard-checkouts", user?.hotelId],
+    queryKey: ["dashboard-checkouts", effectiveHotelId],
     queryFn: () => api.get<Booking[]>(`/dashboard/checkouts${hotelParam}`),
   });
 
@@ -97,13 +98,8 @@ export default function DashboardScreen() {
         </View>
       </View>
 
-      {user?.hotel && (
-        <View style={styles.hotelBanner}>
-          <Feather name="home" size={16} color={C.gold} />
-          <Text style={styles.hotelName}>{user.hotel.name}</Text>
-          <Text style={styles.hotelRooms}>{user.hotel.totalRooms} Rooms</Text>
-        </View>
-      )}
+      <HotelPicker />
+
 
       {isLoading ? (
         <View style={styles.loadingBox}>
@@ -143,7 +139,7 @@ export default function DashboardScreen() {
               iconColor={C.success}
               iconBg={C.successLight}
               label="Monthly Revenue"
-              value={`$${(statsQuery.data?.monthlyRevenue ?? 0).toLocaleString()}`}
+              value={`₹${(statsQuery.data?.monthlyRevenue ?? 0).toLocaleString()}`}
             />
           </View>
 
@@ -233,11 +229,11 @@ function BookingRow({ booking, type }: { booking: Booking; type: "checkin" | "ch
       <View style={[styles.bookingDot, { backgroundColor: type === "checkin" ? C.checkin : C.checkout }]} />
       <View style={styles.bookingInfo}>
         <Text style={styles.guestName}>{booking.guestName}</Text>
-        <Text style={styles.roomInfo}>{booking.roomNumber ? `Room ${booking.roomNumber}` : booking.roomType ?? "—"}</Text>
+        <Text style={styles.roomInfo}>{booking.numberOfRooms ?? 1} room{(booking.numberOfRooms ?? 1) !== 1 ? "s" : ""} · {booking.numberOfPersons ?? 1} pax</Text>
       </View>
       <View style={styles.bookingRight}>
         {booking.balance > 0 && (
-          <Text style={styles.balanceDue}>-${booking.balance.toFixed(0)} due</Text>
+          <Text style={styles.balanceDue}>-₹{booking.balance.toFixed(0)} due</Text>
         )}
         <Feather name="chevron-right" size={16} color={C.textSecondary} />
       </View>
@@ -276,6 +272,14 @@ const styles = StyleSheet.create({
   },
   hotelName: { fontFamily: "Inter_600SemiBold", fontSize: 14, color: "#fff", flex: 1 },
   hotelRooms: { fontFamily: "Inter_400Regular", fontSize: 12, color: "rgba(255,255,255,0.7)" },
+  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
+  modalContent: { backgroundColor: C.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 32 },
+  modalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 },
+  modalTitle: { fontFamily: "Inter_700Bold", fontSize: 20, color: C.text },
+  hotelOption: { flexDirection: "row", alignItems: "center", gap: 12, padding: 14, borderRadius: 12, backgroundColor: C.surfaceSecondary, marginBottom: 8 },
+  hotelOptionActive: { backgroundColor: C.primary },
+  hotelOptionName: { fontFamily: "Inter_600SemiBold", fontSize: 15, color: C.text },
+  hotelOptionMeta: { fontFamily: "Inter_400Regular", fontSize: 12, color: C.textSecondary, marginTop: 2 },
   loadingBox: { height: 300, justifyContent: "center", alignItems: "center" },
   statsRow: { flexDirection: "row", gap: 12, marginBottom: 12 },
   statCard: {

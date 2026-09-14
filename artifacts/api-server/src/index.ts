@@ -1,6 +1,7 @@
 import app from "./app";
 
 const rawPort = process.env["PORT"];
+const host = "0.0.0.0"; // Explicitly bind to all network interfaces
 
 if (!rawPort) {
   throw new Error(
@@ -14,6 +15,7 @@ if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
-app.listen(port, () => {
-  console.log(`Server listening on port ${port}`);
+// Update the listen call to include the host
+app.listen(port, host, () => {
+  console.log(`Server listening on http://${host}:${port}`);
 });

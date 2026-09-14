@@ -1,6 +1,11 @@
 import jwt from "jsonwebtoken";
 
-const JWT_SECRET = process.env["JWT_SECRET"] ?? "hotel-crm-secret-key-change-in-production";
+// Cast to string so TypeScript knows it is never undefined
+const JWT_SECRET = process.env["JWT_SECRET"] as string;
+
+if (!JWT_SECRET) {
+  throw new Error("FATAL: JWT_SECRET environment variable is missing.");
+}
 
 export interface JWTPayload {
   userId: number;
@@ -14,5 +19,6 @@ export function signToken(payload: JWTPayload): string {
 }
 
 export function verifyToken(token: string): JWTPayload {
-  return jwt.verify(token, JWT_SECRET) as JWTPayload;
+  // Cast to unknown first to safely bridge the overlap issue
+  return jwt.verify(token, JWT_SECRET) as unknown as JWTPayload;
 }

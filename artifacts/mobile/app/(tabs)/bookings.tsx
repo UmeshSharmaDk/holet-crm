@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery } from "@tanstack/react-query";
 import Colors from "@/constants/colors";
 import { useAuth } from "@/context/AuthContext";
+import { HotelPicker, useEffectiveHotelId } from "@/components/HotelPicker";
 import { api } from "@/lib/api";
 
 const C = Colors.light;
@@ -25,8 +26,8 @@ interface Booking {
   guestName: string;
   guestEmail: string | null;
   guestPhone: string | null;
-  roomNumber: string | null;
-  roomType: string | null;
+  numberOfRooms: number;
+  numberOfPersons: number;
   checkIn: string;
   checkOut: string;
   roomRent: number;
@@ -60,8 +61,9 @@ export default function BookingsScreen() {
   const [showMonthPicker, setShowMonthPicker] = useState(false);
   const [filterStatus, setFilterStatus] = useState<string>("all");
 
-  const hotelParam = user?.role !== "admin" && user?.hotelId ? `&hotelId=${user.hotelId}` : "";
-  const queryKey = ["bookings", selectedMonth, selectedYear, user?.hotelId];
+  const effectiveHotelId = useEffectiveHotelId();
+  const hotelParam = effectiveHotelId ? `&hotelId=${effectiveHotelId}` : "";
+  const queryKey = ["bookings", selectedMonth, selectedYear, effectiveHotelId];
 
   const { data: bookings, isLoading, refetch, isFetching } = useQuery<Booking[]>({
     queryKey,
@@ -69,7 +71,7 @@ export default function BookingsScreen() {
   });
 
   const filtered = (bookings ?? []).filter((b) => {
-    const matchSearch = !search || b.guestName.toLowerCase().includes(search.toLowerCase()) || b.roomNumber?.includes(search) || b.agency?.name?.toLowerCase().includes(search.toLowerCase());
+    const matchSearch = !search || b.guestName.toLowerCase().includes(search.toLowerCase()) || b.agency?.name?.toLowerCase().includes(search.toLowerCase());
     const matchStatus = filterStatus === "all" || b.status === filterStatus;
     return matchSearch && matchStatus;
   });
@@ -85,12 +87,13 @@ export default function BookingsScreen() {
         </Pressable>
       </View>
 
-      <View style={styles.monthSelector}>
+      <View style={styles.filterRow}>
         <Pressable onPress={() => setShowMonthPicker(true)} style={styles.monthPill}>
           <Feather name="calendar" size={14} color={C.accent} />
           <Text style={styles.monthText}>{MONTHS[selectedMonth - 1]} {selectedYear}</Text>
           <Feather name="chevron-down" size={14} color={C.accent} />
         </Pressable>
+        <HotelPicker variant="pill" />
       </View>
 
       <View style={styles.searchRow}>
@@ -98,7 +101,7 @@ export default function BookingsScreen() {
           <Feather name="search" size={16} color={C.textSecondary} />
           <TextInput
             style={styles.searchInput}
-            placeholder="Search guests, rooms..."
+            placeholder="Search guests, agencies..."
             placeholderTextColor={C.textSecondary}
             value={search}
             onChangeText={setSearch}
@@ -106,7 +109,7 @@ export default function BookingsScreen() {
         </View>
       </View>
 
-      <View style={styles.filterRow}>
+      <View style={styles.statusRow}>
         {["all", "confirmed", "checked_in", "checked_out", "cancelled"].map((s) => (
           <Pressable
             key={s}
@@ -201,16 +204,17 @@ function BookingCard({ booking }: { booking: Booking }) {
         <DetailChip icon="log-in" text={formatDate(booking.checkIn)} />
         <DetailChip icon="log-out" text={formatDate(booking.checkOut)} />
         <DetailChip icon="moon" text={`${nights}n`} />
-        {booking.roomNumber && <DetailChip icon="hash" text={`Rm ${booking.roomNumber}`} />}
+        <DetailChip icon="grid" text={`${booking.numberOfRooms ?? 1} rm`} />
+        <DetailChip icon="users" text={`${booking.numberOfPersons ?? 1} pax`} />
       </View>
       <View style={styles.cardFinancials}>
         <View>
           <Text style={styles.totalLabel}>Total</Text>
-          <Text style={styles.totalValue}>${booking.totalCost.toFixed(2)}</Text>
+          <Text style={styles.totalValue}>₹{booking.totalCost.toFixed(2)}</Text>
         </View>
         {booking.balance > 0 ? (
           <View style={styles.balancePill}>
-            <Text style={styles.balanceText}>Balance: ${booking.balance.toFixed(2)}</Text>
+            <Text style={styles.balanceText}>Balance: ₹{booking.balance.toFixed(2)}</Text>
           </View>
         ) : (
           <View style={styles.paidPill}>
@@ -241,13 +245,13 @@ const styles = StyleSheet.create({
   headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20, paddingBottom: 12 },
   title: { fontFamily: "Inter_700Bold", fontSize: 28, color: C.text, letterSpacing: -0.5 },
   addBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: C.accent, justifyContent: "center", alignItems: "center" },
-  monthSelector: { paddingHorizontal: 20, marginBottom: 12 },
+  filterRow: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 8, paddingHorizontal: 20, marginBottom: 12 },
   monthPill: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: C.accentLight, alignSelf: "flex-start", borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8 },
   monthText: { fontFamily: "Inter_600SemiBold", fontSize: 14, color: C.accent },
   searchRow: { paddingHorizontal: 16, marginBottom: 8 },
   searchWrap: { flexDirection: "row", alignItems: "center", backgroundColor: C.surface, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, gap: 8, borderWidth: 1, borderColor: C.border },
   searchInput: { flex: 1, fontFamily: "Inter_400Regular", fontSize: 14, color: C.text },
-  filterRow: { flexDirection: "row", gap: 8, paddingHorizontal: 16, marginBottom: 4 },
+  statusRow: { flexDirection: "row", gap: 8, paddingHorizontal: 16, marginBottom: 4 },
   filterChip: { borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: C.surfaceSecondary },
   filterChipActive: { backgroundColor: C.primary },
   filterChipText: { fontFamily: "Inter_500Medium", fontSize: 12, color: C.textSecondary },

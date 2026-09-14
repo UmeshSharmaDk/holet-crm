@@ -39,9 +39,14 @@ router.get("/stats", requireAuth, async (req, res) => {
       .where(hotelCondition as any);
 
     const [occupiedResult] = await db
-      .select({ count: count() })
+      .select({ total: sql<number>`coalesce(sum(${bookingsTable.numberOfRooms}), 0)` })
       .from(bookingsTable)
-      .where(and(hotelCondition as any, eq(bookingsTable.status, "checked_in")));
+      .where(and(
+        hotelCondition as any,
+        sql`${bookingsTable.checkIn} <= ${today}`,
+        sql`${bookingsTable.checkOut} > ${today}`,
+        sql`${bookingsTable.status} IN ('confirmed', 'checked_in')`
+      ));
 
     let totalRooms = 0;
     if (effectiveHotelId) {
@@ -61,7 +66,7 @@ router.get("/stats", requireAuth, async (req, res) => {
         sql`${bookingsTable.checkIn} <= ${lastOfMonth}`
       ));
 
-    const occupiedRooms = occupiedResult.count;
+    const occupiedRooms = Number(occupiedResult?.total ?? 0);
     const occupancyPercentage = totalRooms > 0 ? Math.round((occupiedRooms / totalRooms) * 100) : 0;
 
     res.json({
