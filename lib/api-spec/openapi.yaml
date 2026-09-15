@@ -577,6 +577,28 @@ paths:
                 items:
                   $ref: "#/components/schemas/Booking"
 
+  /dashboard/forecast:
+    get:
+      operationId: getDashboardForecast
+      tags: [dashboard]
+      summary: Get upcoming bookings for the next seven days
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: hotelId
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Upcoming bookings for the next seven days
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Booking"
+
   /analytics/occupancy:
     get:
       operationId: getOccupancyStats

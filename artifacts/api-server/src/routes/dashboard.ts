@@ -136,4 +136,42 @@ router.get("/checkouts", requireAuth, async (req, res) => {
   }
 });
 
+router.get("/forecast", requireAuth, async (req, res) => {
+  try {
+    const { hotelId: queryHotelId } = req.query;
+    const effectiveHotelId = req.user?.role === "admin"
+      ? queryHotelId ? parseInt(queryHotelId as string) : undefined
+      : req.user?.hotelId ?? undefined;
+    const today = todayStr();
+    const forecastEnd = new Date(`${today}T00:00:00Z`);
+    forecastEnd.setUTCDate(forecastEnd.getUTCDate() + 7);
+    const forecastEndStr = forecastEnd.toISOString().split("T")[0];
+
+    const conditions: any[] = [
+      sql`${bookingsTable.checkIn} > ${today}`,
+      sql`${bookingsTable.checkIn} <= ${forecastEndStr}`,
+      sql`${bookingsTable.status} IN ('confirmed', 'checked_in')`,
+    ];
+    if (effectiveHotelId) conditions.push(eq(bookingsTable.hotelId, effectiveHotelId));
+
+    const bookings = await db
+      .select()
+      .from(bookingsTable)
+      .where(and(...conditions))
+      .orderBy(bookingsTable.checkIn, bookingsTable.id);
+
+    res.json(bookings.map((b) => ({
+      ...b,
+      roomRent: parseFloat(b.roomRent),
+      addOns: parseFloat(b.addOns),
+      totalCost: parseFloat(b.totalCost),
+      receipt: parseFloat(b.receipt),
+      balance: parseFloat(b.balance),
+    })));
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
 export default router;

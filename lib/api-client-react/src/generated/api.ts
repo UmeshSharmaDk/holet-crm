@@ -25,6 +25,7 @@ import type {
   CreateUserRequest,
   DashboardStats,
   ErrorResponse,
+  GetDashboardForecastParams,
   GetDashboardStatsParams,
   GetOccupancyStatsParams,
   GetRevenueStatsParams,
@@ -2243,6 +2244,106 @@ export function useGetTodayCheckouts<
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetTodayCheckoutsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get upcoming bookings for the next seven days
+ */
+export const getGetDashboardForecastUrl = (
+  params?: GetDashboardForecastParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/dashboard/forecast?${stringifiedParams}`
+    : `/api/dashboard/forecast`;
+};
+
+export const getDashboardForecast = async (
+  params?: GetDashboardForecastParams,
+  options?: RequestInit,
+): Promise<Booking[]> => {
+  return customFetch<Booking[]>(getGetDashboardForecastUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetDashboardForecastQueryKey = (
+  params?: GetDashboardForecastParams,
+) => {
+  return [`/api/dashboard/forecast`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetDashboardForecastQueryOptions = <
+  TData = Awaited<ReturnType<typeof getDashboardForecast>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetDashboardForecastParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getDashboardForecast>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetDashboardForecastQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getDashboardForecast>>
+  > = ({ signal }) =>
+    getDashboardForecast(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getDashboardForecast>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetDashboardForecastQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getDashboardForecast>>
+>;
+export type GetDashboardForecastQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get upcoming bookings for the next seven days
+ */
+
+export function useGetDashboardForecast<
+  TData = Awaited<ReturnType<typeof getDashboardForecast>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetDashboardForecastParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getDashboardForecast>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetDashboardForecastQueryOptions(params, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

@@ -278,6 +278,10 @@ export type GetTodayCheckoutsParams = {
   hotelId?: number;
 };
 
+export type GetDashboardForecastParams = {
+  hotelId?: number;
+};
+
 export type GetOccupancyStatsParams = {
   hotelId?: number;
   month?: number;

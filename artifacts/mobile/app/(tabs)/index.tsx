@@ -62,12 +62,18 @@ export default function DashboardScreen() {
     queryFn: () => api.get<Booking[]>(`/dashboard/checkouts${hotelParam}`),
   });
 
+  const forecastQuery = useQuery<Booking[]>({
+    queryKey: ["dashboard-forecast", effectiveHotelId],
+    queryFn: () => api.get<Booking[]>(`/dashboard/forecast${hotelParam}`),
+  });
+
   const isLoading = statsQuery.isLoading;
 
   function refetchAll() {
     statsQuery.refetch();
     checkinsQuery.refetch();
     checkoutsQuery.refetch();
+    forecastQuery.refetch();
   }
 
   const today = new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
@@ -185,6 +191,25 @@ export default function DashboardScreen() {
               <BookingRow key={b.id} booking={b} type="checkout" />
             ))
           )}
+
+          <View style={styles.forecastHeader}>
+            <View style={styles.forecastTitleRow}>
+              <Feather name="trending-up" size={18} color={C.accent} />
+              <Text style={styles.sectionTitle}>7-Day Forecast</Text>
+            </View>
+            <Text style={styles.forecastSubtitle}>Upcoming check-ins</Text>
+          </View>
+          {forecastQuery.isLoading ? (
+            <View style={styles.forecastLoading}>
+              <ActivityIndicator size="small" color={C.accent} />
+            </View>
+          ) : forecastQuery.data?.length === 0 ? (
+            <EmptyState icon="calendar" message="No upcoming bookings in the next 7 days" />
+          ) : (
+            forecastQuery.data?.map((b) => (
+              <BookingRow key={b.id} booking={b} type="forecast" />
+            ))
+          )}
         </>
       )}
     </ScrollView>
@@ -220,16 +245,20 @@ function StatCard({ icon, iconColor, iconBg, label, value, onPress }: {
   );
 }
 
-function BookingRow({ booking, type }: { booking: Booking; type: "checkin" | "checkout" }) {
+function BookingRow({ booking, type }: { booking: Booking; type: "checkin" | "checkout" | "forecast" }) {
+  const dotColor = type === "checkin" ? C.checkin : type === "checkout" ? C.checkout : C.accent;
+  const detailText = type === "forecast"
+    ? `Check-in ${formatDate(booking.checkIn)} · ${booking.numberOfRooms ?? 1} room${(booking.numberOfRooms ?? 1) !== 1 ? "s" : ""} · ${booking.numberOfPersons ?? 1} pax`
+    : `${booking.numberOfRooms ?? 1} room${(booking.numberOfRooms ?? 1) !== 1 ? "s" : ""} · ${booking.numberOfPersons ?? 1} pax`;
   return (
     <Pressable
       style={({ pressed }) => [styles.bookingRow, pressed && { opacity: 0.85 }]}
       onPress={() => router.push(`/booking/${booking.id}` as any)}
     >
-      <View style={[styles.bookingDot, { backgroundColor: type === "checkin" ? C.checkin : C.checkout }]} />
+      <View style={[styles.bookingDot, { backgroundColor: dotColor }]} />
       <View style={styles.bookingInfo}>
         <Text style={styles.guestName}>{booking.guestName}</Text>
-        <Text style={styles.roomInfo}>{booking.numberOfRooms ?? 1} room{(booking.numberOfRooms ?? 1) !== 1 ? "s" : ""} · {booking.numberOfPersons ?? 1} pax</Text>
+        <Text style={styles.roomInfo}>{detailText}</Text>
       </View>
       <View style={styles.bookingRight}>
         {booking.balance > 0 && (
@@ -239,6 +268,10 @@ function BookingRow({ booking, type }: { booking: Booking; type: "checkin" | "ch
       </View>
     </Pressable>
   );
+}
+
+function formatDate(value: string) {
+  return new Date(`${value}T00:00:00`).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 }
 
 function EmptyState({ icon, message }: { icon: string; message: string }) {
@@ -337,4 +370,8 @@ const styles = StyleSheet.create({
   balanceDue: { fontFamily: "Inter_500Medium", fontSize: 12, color: C.danger },
   emptyState: { alignItems: "center", gap: 8, padding: 24 },
   emptyText: { fontFamily: "Inter_400Regular", fontSize: 13, color: C.textSecondary },
+  forecastHeader: { marginTop: 20, marginBottom: 12 },
+  forecastTitleRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  forecastSubtitle: { fontFamily: "Inter_400Regular", fontSize: 12, color: C.textSecondary, marginTop: 3, marginLeft: 26 },
+  forecastLoading: { paddingVertical: 24, alignItems: "center" },
 });

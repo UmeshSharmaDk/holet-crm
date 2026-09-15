@@ -691,6 +691,69 @@ export const GetTodayCheckoutsResponse = zod.array(
 );
 
 /**
+ * @summary Get upcoming bookings for the next seven days
+ */
+export const GetDashboardForecastQueryParams = zod.object({
+  hotelId: zod.coerce.number().optional(),
+});
+
+export const GetDashboardForecastResponseItem = zod.object({
+  id: zod.number(),
+  guestName: zod.string(),
+  guestEmail: zod.string().nullish(),
+  guestPhone: zod.string().nullish(),
+  roomNumber: zod.string().nullish(),
+  roomType: zod.string().nullish(),
+  checkIn: zod.date(),
+  checkOut: zod.date(),
+  roomRent: zod.number(),
+  addOns: zod.number(),
+  totalCost: zod.number(),
+  receipt: zod.number(),
+  balance: zod.number(),
+  notes: zod.string().nullish(),
+  status: zod.enum(["confirmed", "checked_in", "checked_out", "cancelled"]),
+  hotelId: zod.number(),
+  agencyId: zod.number().nullish(),
+  agency: zod
+    .object({
+      id: zod.number(),
+      name: zod.string(),
+      contactEmail: zod.string().nullish(),
+      contactPhone: zod.string().nullish(),
+      hotelId: zod.number(),
+      createdAt: zod.date(),
+    })
+    .nullish(),
+  hotel: zod
+    .object({
+      id: zod.number(),
+      name: zod.string(),
+      totalRooms: zod.number(),
+      createdAt: zod.date(),
+    })
+    .nullish(),
+  guests: zod
+    .array(
+      zod.object({
+        id: zod.number(),
+        personIndex: zod.number(),
+        name: zod.string(),
+        dateOfBirth: zod.date().nullish(),
+        relation: zod.string(),
+        hasFrontId: zod.boolean(),
+        hasBackId: zod.boolean(),
+      }),
+    )
+    .optional(),
+  createdAt: zod.date(),
+  updatedAt: zod.date(),
+});
+export const GetDashboardForecastResponse = zod.array(
+  GetDashboardForecastResponseItem,
+);
+
+/**
  * @summary Get occupancy analytics
  */
 export const GetOccupancyStatsQueryParams = zod.object({

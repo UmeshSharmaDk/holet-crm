@@ -19,6 +19,7 @@ export * from "./createUserRequest";
 export * from "./createUserRequestRole";
 export * from "./dashboardStats";
 export * from "./errorResponse";
+export * from "./getDashboardForecastParams";
 export * from "./getDashboardStatsParams";
 export * from "./getOccupancyStatsParams";
 export * from "./getRevenueStatsParams";
