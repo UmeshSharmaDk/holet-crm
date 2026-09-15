@@ -15,7 +15,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Colors from "@/constants/colors";
 import { useAuth } from "@/context/AuthContext";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getAuthToken } from "@/lib/secureStorage";
 
 const C = Colors.light;
 const BASE_URL = process.env.EXPO_PUBLIC_DOMAIN ? `https://${process.env.EXPO_PUBLIC_DOMAIN}` : "";
@@ -24,6 +24,11 @@ interface ChatMsg {
   role: "user" | "assistant";
   content: string;
   id: string;
+}
+
+interface PendingAction {
+  token: string;
+  description: string;
 }
 
 const STARTERS_EN = [
@@ -46,6 +51,9 @@ export default function AIScreen() {
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [speakingId, setSpeakingId] = useState<string | null>(null);
+  // A write the assistant proposed. It is only applied when the user confirms,
+  // so text hidden inside a CRM record cannot drive a change on its own.
+  const [pending, setPending] = useState<PendingAction | null>(null);
   const scrollRef = useRef<ScrollView>(null);
   const soundRef = useRef<Audio.Sound | null>(null);
   const webRecorderRef = useRef<MediaRecorder | null>(null);
@@ -62,7 +70,7 @@ export default function AIScreen() {
   }, [messages, loading]);
 
   async function authHeaders(): Promise<Record<string, string>> {
-    const token = await AsyncStorage.getItem("auth_token");
+    const token = await getAuthToken();
     return token ? { Authorization: `Bearer ${token}` } : {};
   }
 
@@ -73,6 +81,7 @@ export default function AIScreen() {
     const next = [...messages, userMsg];
     setMessages(next);
     setInput("");
+    setPending(null);
     setLoading(true);
     try {
       const headers = await authHeaders();
@@ -86,11 +95,39 @@ export default function AIScreen() {
       const data = await res.json();
       if (!res.ok) throw new Error(data?.message ?? "AI error");
       setMessages((prev) => [...prev, { role: "assistant", content: data.reply, id: String(Date.now() + 1) }]);
+      if (data.pendingAction?.token) setPending(data.pendingAction);
     } catch (e: any) {
       setMessages((prev) => [...prev, { role: "assistant", content: `⚠️ ${e?.message ?? "Failed"}`, id: String(Date.now() + 1) }]);
     } finally {
       setLoading(false);
     }
+  }
+
+  async function confirmPending() {
+    if (!pending || loading) return;
+    const action = pending;
+    setPending(null);
+    setLoading(true);
+    try {
+      const headers = await authHeaders();
+      const res = await fetch(`${BASE_URL}/api/ai/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...headers },
+        body: JSON.stringify({ confirmToken: action.token }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.message ?? "AI error");
+      setMessages((prev) => [...prev, { role: "assistant", content: data.reply, id: String(Date.now() + 1) }]);
+    } catch (e: any) {
+      setMessages((prev) => [...prev, { role: "assistant", content: `⚠️ ${e?.message ?? "Failed"}`, id: String(Date.now() + 1) }]);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function cancelPending() {
+    setPending(null);
+    setMessages((prev) => [...prev, { role: "assistant", content: "Cancelled — nothing was changed.", id: String(Date.now() + 1) }]);
   }
 
   async function startRecording() {
@@ -198,6 +235,7 @@ export default function AIScreen() {
 
   function clearChat() {
     setMessages([]);
+    setPending(null);
   }
 
   const showStarters = messages.length === 0 && !loading;
@@ -268,6 +306,25 @@ export default function AIScreen() {
             </View>
           </View>
         ))}
+
+        {pending && !loading && (
+          <View style={styles.confirmCard}>
+            <View style={styles.confirmHeader}>
+              <Feather name="alert-circle" size={16} color={C.gold} />
+              <Text style={styles.confirmTitle}>Confirm change</Text>
+            </View>
+            <Text style={styles.confirmText}>{pending.description}</Text>
+            <View style={styles.confirmActions}>
+              <Pressable style={styles.confirmCancel} onPress={cancelPending}>
+                <Text style={styles.confirmCancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable style={styles.confirmApply} onPress={confirmPending}>
+                <Feather name="check" size={16} color="#fff" />
+                <Text style={styles.confirmApplyText}>Confirm</Text>
+              </Pressable>
+            </View>
+          </View>
+        )}
 
         {loading && (
           <View style={[styles.bubbleRow, styles.bubbleRowAi]}>
@@ -345,6 +402,15 @@ const styles = StyleSheet.create({
   bubbleText: { fontFamily: "Inter_400Regular", fontSize: 14, lineHeight: 20 },
   speakBtn: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 6, paddingTop: 6, borderTopWidth: 1, borderTopColor: C.border },
   speakText: { fontFamily: "Inter_500Medium", fontSize: 11, color: C.accent },
+  confirmCard: { backgroundColor: C.surface, borderRadius: 16, borderWidth: 1.5, borderColor: C.gold, padding: 14, marginTop: 8, marginBottom: 4 },
+  confirmHeader: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8 },
+  confirmTitle: { fontFamily: "Inter_700Bold", fontSize: 13, color: C.text },
+  confirmText: { fontFamily: "Inter_400Regular", fontSize: 14, lineHeight: 20, color: C.text },
+  confirmActions: { flexDirection: "row", justifyContent: "flex-end", gap: 8, marginTop: 12 },
+  confirmCancel: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10, backgroundColor: C.surfaceSecondary },
+  confirmCancelText: { fontFamily: "Inter_600SemiBold", fontSize: 13, color: C.textSecondary },
+  confirmApply: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10, backgroundColor: C.accent },
+  confirmApplyText: { fontFamily: "Inter_600SemiBold", fontSize: 13, color: "#fff" },
   thinkingBubble: { flexDirection: "row", alignItems: "center", gap: 8 },
   thinkingText: { fontFamily: "Inter_400Regular", fontSize: 13, color: C.textSecondary },
   inputBar: { flexDirection: "row", alignItems: "flex-end", gap: 8, paddingHorizontal: 12, paddingTop: 8, backgroundColor: C.surface, borderTopWidth: 1, borderTopColor: C.border },

@@ -120,13 +120,6 @@ export default function LoginScreen() {
               <Text style={styles.loginBtnText}>Sign In</Text>
             )}
           </Pressable>
-
-          <View style={styles.demoHint}>
-            <Text style={styles.demoTitle}>Demo Credentials</Text>
-            <Text style={styles.demoLine}>admin@hotel.com / admin123</Text>
-            <Text style={styles.demoLine}>owner@hotel.com / owner123</Text>
-            <Text style={styles.demoLine}>manager@hotel.com / manager123</Text>
-          </View>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -203,12 +196,4 @@ const styles = StyleSheet.create({
   loginBtnPressed: { opacity: 0.85 },
   loginBtnDisabled: { opacity: 0.6 },
   loginBtnText: { fontFamily: "Inter_700Bold", fontSize: 16, color: "#fff" },
-  demoHint: {
-    backgroundColor: C.accentLight,
-    borderRadius: 10,
-    padding: 12,
-    gap: 2,
-  },
-  demoTitle: { fontFamily: "Inter_600SemiBold", fontSize: 12, color: C.accent, marginBottom: 4 },
-  demoLine: { fontFamily: "Inter_400Regular", fontSize: 11, color: C.textSecondary },
 });

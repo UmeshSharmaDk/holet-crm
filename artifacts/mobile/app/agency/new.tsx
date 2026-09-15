@@ -18,11 +18,15 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import Colors from "@/constants/colors";
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api";
+import { useEffectiveHotelId } from "@/components/HotelPicker";
 
 const C = Colors.light;
 
 export default function NewAgencyScreen() {
   const { user } = useAuth();
+  // Same as the booking form: an admin's own hotelId is null, so the hotel has
+  // to come from the picker rather than from the user record.
+  const effectiveHotelId = useEffectiveHotelId();
   const insets = useSafeAreaInsets();
   const qc = useQueryClient();
   const [form, setForm] = useState({ name: "", contactEmail: "", contactPhone: "" });
@@ -38,11 +42,17 @@ export default function NewAgencyScreen() {
 
   function submit() {
     if (!form.name.trim()) { Alert.alert("Error", "Agency name is required"); return; }
+    if (!effectiveHotelId) {
+      Alert.alert("Error", user?.role === "admin"
+        ? "Select a specific hotel before creating an agency."
+        : "Your account is not assigned to a hotel.");
+      return;
+    }
     mutation.mutate({
       name: form.name.trim(),
       contactEmail: form.contactEmail.trim() || null,
       contactPhone: form.contactPhone.trim() || null,
-      hotelId: user?.hotelId ?? undefined,
+      hotelId: effectiveHotelId,
     });
   }
 

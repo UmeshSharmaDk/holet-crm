@@ -65,19 +65,64 @@ function serveManifest(platform, res) {
   res.end(manifest);
 }
 
+/**
+ * A hostname[:port], and nothing else.
+ *
+ * The host is taken from request headers, which any client controls. It is
+ * interpolated into an HTML attribute and into a JavaScript string literal in
+ * the landing page, so a value containing a quote could break out of either and
+ * run script on the origin that holds the app's session token. Restricting the
+ * value to this character set leaves nothing that is significant in either
+ * context.
+ */
+const HOST_RE = /^[A-Za-z0-9.-]{1,253}(:\d{1,5})?$/;
+const PROTO_RE = /^https?$/;
+
+const FALLBACK_HOST = process.env.PUBLIC_HOST || "localhost";
+
+function safeHost(req) {
+  const candidates = [req.headers["x-forwarded-host"], req.headers["host"]];
+  for (const raw of candidates) {
+    // A forwarded header may carry a comma-separated chain; the first hop is ours.
+    const value = String(raw || "").split(",")[0].trim();
+    if (HOST_RE.test(value)) return value;
+  }
+  return FALLBACK_HOST;
+}
+
+function safeProto(req) {
+  const value = String(req.headers["x-forwarded-proto"] || "").split(",")[0].trim();
+  return PROTO_RE.test(value) ? value : "https";
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+/** Replaces with a function so `$&`-style patterns in the value are not expanded. */
+function fill(template, placeholder, value) {
+  return template.replace(new RegExp(placeholder, "g"), () => value);
+}
+
 function serveLandingPage(req, res, landingPageTemplate, appName) {
-  const forwardedProto = req.headers["x-forwarded-proto"];
-  const protocol = forwardedProto || "https";
-  const host = req.headers["x-forwarded-host"] || req.headers["host"];
+  const protocol = safeProto(req);
+  const host = safeHost(req);
   const baseUrl = `${protocol}://${host}`;
-  const expsUrl = `${host}`;
 
-  const html = landingPageTemplate
-    .replace(/BASE_URL_PLACEHOLDER/g, baseUrl)
-    .replace(/EXPS_URL_PLACEHOLDER/g, expsUrl)
-    .replace(/APP_NAME_PLACEHOLDER/g, appName);
+  let html = fill(landingPageTemplate, "BASE_URL_PLACEHOLDER", baseUrl);
+  html = fill(html, "EXPS_URL_PLACEHOLDER", host);
+  html = fill(html, "APP_NAME_PLACEHOLDER", escapeHtml(appName));
 
-  res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+  res.writeHead(200, {
+    "content-type": "text/html; charset=utf-8",
+    "x-content-type-options": "nosniff",
+    "referrer-policy": "no-referrer",
+  });
   res.end(html);
 }
 
@@ -108,8 +153,15 @@ const landingPageTemplate = fs.readFileSync(TEMPLATE_PATH, "utf-8");
 const appName = getAppName();
 
 const server = http.createServer((req, res) => {
-  const url = new URL(req.url || "/", `http://${req.headers.host}`);
-  let pathname = url.pathname;
+  let pathname;
+  try {
+    // Parsed against a fixed base: an invalid Host header must not throw here.
+    pathname = new URL(req.url || "/", "http://placeholder.invalid").pathname;
+  } catch {
+    res.writeHead(400, { "content-type": "text/plain" });
+    res.end("Bad Request");
+    return;
+  }
 
   if (basePath && pathname.startsWith(basePath)) {
     pathname = pathname.slice(basePath.length) || "/";

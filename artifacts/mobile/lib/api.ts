@@ -1,9 +1,9 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getAuthToken } from "./secureStorage";
 
 const BASE_URL = process.env.EXPO_PUBLIC_DOMAIN ? `https://${process.env.EXPO_PUBLIC_DOMAIN}` : "";
 
 async function getToken() {
-  return AsyncStorage.getItem("auth_token");
+  return getAuthToken();
 }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {

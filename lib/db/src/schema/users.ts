@@ -12,9 +12,11 @@ export const usersTable = pgTable("users", {
   passwordHash: text("password_hash").notNull(),
   role: userRoleEnum("role").notNull().default("manager"),
   hotelId: integer("hotel_id").references(() => hotelsTable.id, { onDelete: "set null" }),
+  // Bumped whenever credentials change so already-issued JWTs stop verifying.
+  tokenVersion: integer("token_version").notNull().default(0),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
-export const insertUserSchema = createInsertSchema(usersTable).omit({ id: true, createdAt: true });
+export const insertUserSchema = createInsertSchema(usersTable).omit({ id: true, createdAt: true, tokenVersion: true });
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof usersTable.$inferSelect;
