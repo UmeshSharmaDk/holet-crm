@@ -4,10 +4,7 @@ import React, { useState, useMemo } from "react";
 import {
   ActivityIndicator,
   Alert,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -27,6 +24,7 @@ import {
   resizeBookingGuests,
   validateBookingGuests,
 } from "@/components/BookingGuestsForm";
+import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 
 const C = Colors.light;
 
@@ -127,10 +125,6 @@ export default function NewBookingScreen() {
   }
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-    >
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.topBar}>
         <Pressable onPress={() => router.back()} style={styles.backBtn}>
@@ -139,7 +133,11 @@ export default function NewBookingScreen() {
         <Text style={styles.topTitle}>New Booking</Text>
       </View>
 
-      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 20 }]} showsVerticalScrollIndicator={false}>
+      <KeyboardAwareScrollViewCompat
+        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 20 }]}
+        bottomOffset={24}
+        showsVerticalScrollIndicator={false}
+      >
 
         <SectionHeader title="Guest Information" />
         <FormField label="Guest Name *" value={form.guestName} onChangeText={(v: string) => update("guestName", v)} placeholder="John Smith" />
@@ -264,9 +262,8 @@ export default function NewBookingScreen() {
             ? <ActivityIndicator color="#fff" size="small" />
             : <><Feather name="plus" size={20} color="#fff" /><Text style={styles.submitText}>Create Booking</Text></>}
         </Pressable>
-      </ScrollView>
+      </KeyboardAwareScrollViewCompat>
     </View>
-    </KeyboardAvoidingView>
   );
 }
 

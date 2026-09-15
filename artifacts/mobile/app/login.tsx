@@ -3,10 +3,7 @@ import { router } from "expo-router";
 import React, { useState } from "react";
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -15,6 +12,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Colors from "@/constants/colors";
 import { useAuth } from "@/context/AuthContext";
+import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 
 const C = Colors.light;
 
@@ -45,15 +43,12 @@ export default function LoginScreen() {
   }
 
   return (
-    <KeyboardAvoidingView
+    <KeyboardAwareScrollViewCompat
       style={styles.container}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 60, paddingBottom: insets.bottom + 24 }]}
+      bottomOffset={24}
+      showsVerticalScrollIndicator={false}
     >
-      <ScrollView
-        contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 60, paddingBottom: insets.bottom + 24 }]}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-      >
         <View style={styles.logoArea}>
           <View style={styles.logoIcon}>
             <Feather name="home" size={36} color={C.gold} />
@@ -128,8 +123,7 @@ export default function LoginScreen() {
             <Text style={styles.demoLine}>manager@hotel.com / manager123</Text>
           </View>
         </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+    </KeyboardAwareScrollViewCompat>
   );
 }
 

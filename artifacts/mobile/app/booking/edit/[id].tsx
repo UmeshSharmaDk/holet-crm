@@ -4,10 +4,7 @@ import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -26,6 +23,7 @@ import {
   resizeBookingGuests,
   validateBookingGuests,
 } from "@/components/BookingGuestsForm";
+import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 
 const C = Colors.light;
 
@@ -186,8 +184,11 @@ export default function EditBookingScreen() {
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <TopBar title={`Edit Booking #${id}`} />
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
-        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <KeyboardAwareScrollViewCompat
+        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 20 }]}
+        bottomOffset={24}
+        showsVerticalScrollIndicator={false}
+      >
 
           <SectionHeader title="Guest Information" />
           <FormField label="Guest Name *" value={form.guestName} onChangeText={(v: string) => update("guestName", v)} placeholder="John Smith" />
@@ -278,8 +279,7 @@ export default function EditBookingScreen() {
               ? <ActivityIndicator color="#fff" size="small" />
               : <Text style={styles.submitText}>Save Changes</Text>}
           </Pressable>
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollViewCompat>
     </View>
   );
 }
