@@ -20,6 +20,7 @@ import {
 import { sendBookingUpdateEmail, BookingComparison } from "../lib/email.js";
 import multer from "multer";
 import rateLimit from "express-rate-limit";
+import { PostgresRateLimitStore } from "../lib/rateLimitStore.js";
 
 const router = Router();
 
@@ -67,6 +68,9 @@ const guestUploadLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req) => String(req.user?.userId ?? "anonymous"),
+  // Shared: this bounds memory pressure on the server, which is a
+  // deployment-wide resource rather than a per-process one.
+  store: new PostgresRateLimitStore("guest-upload"),
   message: { error: "Too Many Requests", message: "Too many guest uploads, please slow down." },
 });
 

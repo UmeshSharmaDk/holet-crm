@@ -2,6 +2,7 @@ import express, { type Express, type NextFunction, type Request, type Response }
 import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
+import { PostgresRateLimitStore } from "./lib/rateLimitStore.js";
 import router from "./routes";
 
 const app: Express = express();
@@ -51,6 +52,11 @@ app.use(
   })
 );
 
+// Deliberately left on the in-process store. This runs on every request, so a
+// shared store would put a database round-trip in front of all traffic, and
+// the guarantee it provides — crude flood protection — degrades gracefully
+// when it is per-instance. The limiters where the count actually has to hold
+// are backed by the database instead.
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: Number(process.env["RATE_LIMIT_MAX"] ?? 300),
@@ -83,6 +89,9 @@ const loginLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   skipSuccessfulRequests: true,
+  // Shared and durable: a restart or a second instance must not hand an
+  // attacker a fresh allowance against the same account.
+  store: new PostgresRateLimitStore("login"),
   keyGenerator: (req) => {
     const email = typeof req.body?.email === "string" ? req.body.email.trim().toLowerCase() : "";
     return `${clientKey(req.ip ?? "unknown")}|${email}`;

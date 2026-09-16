@@ -30,11 +30,19 @@ export async function stopServer(): Promise<void> {
   server = null;
 }
 
-/** Wipes every table and restarts the id sequences so fixture ids are stable. */
+/**
+ * Wipes every table and restarts the id sequences so fixture ids are stable.
+ *
+ * rate_limits is included deliberately. Since those counters moved into the
+ * database they outlive the process — which is the entire point — so without
+ * this a suite inherits the budget the previous one spent and starts seeing
+ * 429s that have nothing to do with what it is testing.
+ */
 export async function resetDatabase(): Promise<void> {
   await db.execute(
     sql`TRUNCATE TABLE booking_guests, bookings, agencies, users, hotels RESTART IDENTITY CASCADE`,
   );
+  await db.execute(sql`TRUNCATE TABLE rate_limits`);
 }
 
 export interface Fixtures {
