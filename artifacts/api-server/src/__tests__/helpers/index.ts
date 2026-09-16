@@ -43,6 +43,7 @@ export async function resetDatabase(): Promise<void> {
     sql`TRUNCATE TABLE booking_guests, bookings, agencies, users, hotels RESTART IDENTITY CASCADE`,
   );
   await db.execute(sql`TRUNCATE TABLE rate_limits`);
+  await db.execute(sql`TRUNCATE TABLE audit_log RESTART IDENTITY`);
 }
 
 export interface Fixtures {

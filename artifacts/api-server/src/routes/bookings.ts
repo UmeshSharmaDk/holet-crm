@@ -18,6 +18,7 @@ import {
   handleValidationError,
 } from "../lib/validate.js";
 import { sendBookingUpdateEmail, BookingComparison } from "../lib/email.js";
+import { recordAudit } from "../lib/audit.js";
 import multer from "multer";
 import rateLimit from "express-rate-limit";
 import { PostgresRateLimitStore } from "../lib/rateLimitStore.js";
@@ -273,6 +274,14 @@ router.get("/:bookingId/guests/:guestId/id/:side", requireAuth, requireHotelScop
       return;
     }
 
+    await recordAudit(req, {
+      action: "guest_id_scan.read",
+      targetType: "guest",
+      targetId: guestId,
+      hotelId: booking.hotelId,
+      detail: { bookingId, side },
+    });
+
     res.setHeader("Content-Type", mimeType && ID_IMAGE_MIME.has(mimeType) ? mimeType : "application/octet-stream");
     res.setHeader("X-Content-Type-Options", "nosniff");
     res.setHeader("Content-Disposition", `inline; filename="${safeDownloadName(fileName, `${side}-id.jpg`)}"`);
@@ -347,6 +356,14 @@ router.post("/:id/guests", requireAuth, guestUploadLimiter, requireHotelScope, g
     await db.transaction(async (tx) => {
       await tx.delete(bookingGuestsTable).where(eq(bookingGuestsTable.bookingId, bookingId));
       await tx.insert(bookingGuestsTable).values(rows);
+    });
+
+    await recordAudit(req, {
+      action: "guest_roster.write",
+      targetType: "booking",
+      targetId: bookingId,
+      hotelId: booking.hotelId,
+      detail: { guests: rows.length, withFrontId: rows.filter((r) => r.frontIdData).length },
     });
 
     res.status(201).json(await fetchBookingWithGuests(bookingId));
@@ -598,6 +615,13 @@ router.delete("/:id", requireAuth, requireOwnerOrAdmin, requireHotelScope, async
     if (denyOutOfScope(res, req.hotelScope as HotelScope, existing.hotelId)) return;
 
     await db.delete(bookingsTable).where(eq(bookingsTable.id, bookingId));
+    await recordAudit(req, {
+      action: "booking.delete",
+      targetType: "booking",
+      targetId: bookingId,
+      hotelId: existing.hotelId,
+      detail: { guestName: existing.guestName, checkIn: existing.checkIn },
+    });
     res.status(204).send();
   } catch (error) {
     console.error(error);

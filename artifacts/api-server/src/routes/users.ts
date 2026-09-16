@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { db, usersTable, hotelsTable } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
 import { requireAuth, requireAdmin } from "../middlewares/auth.js";
+import { recordAudit } from "../lib/audit.js";
 import {
   parseIdParam,
   parseOptionalId,
@@ -151,6 +152,28 @@ router.put("/:id", requireAuth, requireAdmin, async (req, res) => {
       await db.update(usersTable).set(updateData).where(eq(usersTable.id, userId));
     }
 
+    // Recorded separately: a role change and a credential reset are different
+    // questions after an incident, and both matter.
+    if (updateData.role !== undefined && updateData.role !== existing.role) {
+      await recordAudit(req, {
+        action: "user.role_change",
+        targetType: "user",
+        targetId: userId,
+        hotelId: (updateData.hotelId as number | null | undefined) ?? existing.hotelId,
+        detail: { from: existing.role, to: updateData.role, email: existing.email },
+      });
+    }
+    if (body.password !== undefined) {
+      await recordAudit(req, {
+        action: "user.password_change",
+        targetType: "user",
+        targetId: userId,
+        hotelId: existing.hotelId,
+        // The password itself is never recorded — only that it was reset.
+        detail: { email: existing.email, sessionsInvalidated: true },
+      });
+    }
+
     const [user] = await userQuery().where(eq(usersTable.id, userId));
     res.json(user);
   } catch (error: any) {
@@ -182,6 +205,13 @@ router.delete("/:id", requireAuth, requireAdmin, async (req, res) => {
     }
 
     await db.delete(usersTable).where(eq(usersTable.id, userId));
+    await recordAudit(req, {
+      action: "user.delete",
+      targetType: "user",
+      targetId: userId,
+      hotelId: existing.hotelId,
+      detail: { email: existing.email, role: existing.role },
+    });
     res.status(204).send();
   } catch (error) {
     console.error(error);

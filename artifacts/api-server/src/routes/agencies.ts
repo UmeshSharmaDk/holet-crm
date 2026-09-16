@@ -2,6 +2,7 @@ import { Router } from "express";
 import { db, agenciesTable, hotelsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { requireAuth, requireOwnerOrAdmin } from "../middlewares/auth.js";
+import { recordAudit } from "../lib/audit.js";
 import { requireHotelScope, hotelFilter, denyOutOfScope, type HotelScope } from "../lib/scope.js";
 import {
   parseIdParam,
@@ -133,6 +134,13 @@ router.delete("/:id", requireAuth, requireOwnerOrAdmin, requireHotelScope, async
     if (denyOutOfScope(res, req.hotelScope as HotelScope, existing.hotelId)) return;
 
     await db.delete(agenciesTable).where(eq(agenciesTable.id, agencyId));
+    await recordAudit(req, {
+      action: "agency.delete",
+      targetType: "agency",
+      targetId: agencyId,
+      hotelId: existing.hotelId,
+      detail: { name: existing.name },
+    });
     res.status(204).send();
   } catch (error) {
     console.error(error);
