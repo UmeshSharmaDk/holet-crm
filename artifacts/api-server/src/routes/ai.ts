@@ -1,6 +1,7 @@
 import { Router } from "express";
 import multer from "multer";
 import rateLimit from "express-rate-limit";
+import { PostgresRateLimitStore } from "../lib/rateLimitStore.js";
 import { db, bookingsTable, hotelsTable, agenciesTable } from "@workspace/db";
 import { eq, and, between, sql, desc } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth.js";
@@ -45,6 +46,9 @@ const aiLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req) => String(req.user?.userId ?? "anonymous"),
+  // Shared: this budget protects a metered third-party API, so it has to hold
+  // across instances rather than being multiplied by them.
+  store: new PostgresRateLimitStore("ai"),
   message: { error: "Too Many Requests", message: "Too many AI requests, please slow down." },
 });
 
