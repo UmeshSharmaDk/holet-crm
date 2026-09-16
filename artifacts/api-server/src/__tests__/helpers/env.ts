@@ -20,3 +20,7 @@ process.env["JWT_SECRET"] ??= "test-only-secret-not-used-anywhere-real";
 // is smaller than a full run. The login limiter keeps its real value: it skips
 // successful requests, so only the throttling test spends from it.
 process.env["RATE_LIMIT_MAX"] ??= "1000000";
+
+// Low enough that the upload budget can be exhausted in a test without
+// hundreds of requests, high enough that the other suites never reach it.
+process.env["GUEST_UPLOAD_RATE_LIMIT_PER_MINUTE"] ??= "40";

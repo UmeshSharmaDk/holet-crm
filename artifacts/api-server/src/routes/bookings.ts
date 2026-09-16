@@ -19,16 +19,55 @@ import {
 } from "../lib/validate.js";
 import { sendBookingUpdateEmail, BookingComparison } from "../lib/email.js";
 import multer from "multer";
+import rateLimit from "express-rate-limit";
 
 const router = Router();
+
+/** A booking may record at most this many guests, each with a front and back ID. */
+const MAX_GUESTS = 12;
+
+/**
+ * Generous for a photograph of an identity card, and the point at which the
+ * memory cost stops being reasonable.
+ *
+ * These files are buffered in memory for the whole request, so the ceiling is
+ * files x fileSize held at once, per concurrent upload. At the previous
+ * 24 x 8 MB that was 192 MB for a single request from any authenticated user
+ * of the hotel — enough for a handful of concurrent uploads to exhaust the
+ * container and take the API down for every tenant.
+ */
+const MAX_ID_IMAGE_BYTES = 2 * 1024 * 1024;
+
 const guestUpload = multer({
   storage: multer.memoryStorage(),
-  limits: { files: 24, fileSize: 8 * 1024 * 1024 },
+  limits: {
+    files: MAX_GUESTS * 2,
+    fileSize: MAX_ID_IMAGE_BYTES,
+    // The roster arrives as one JSON field; cap it so the text side cannot be
+    // used to do what the file limits now prevent.
+    fields: 4,
+    fieldSize: 64 * 1024,
+    parts: MAX_GUESTS * 2 + 4,
+  },
   fileFilter: (_req, file, callback) => {
     // Declared by the client, so it gates storage only; what is served back is
     // re-checked against the same allowlist on the way out.
     callback(null, ID_IMAGE_MIME.has(file.mimetype));
   },
+});
+
+/**
+ * Size limits bound a single request; this bounds how many a caller can make.
+ * Without it the ceiling is only the global limiter, which is far too generous
+ * for a route that buffers images in memory.
+ */
+const guestUploadLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: Number(process.env["GUEST_UPLOAD_RATE_LIMIT_PER_MINUTE"] ?? 10),
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => String(req.user?.userId ?? "anonymous"),
+  message: { error: "Too Many Requests", message: "Too many guest uploads, please slow down." },
 });
 
 function calcTotalAndBalance(roomRent: number, addOns: number, receipt: number) {
@@ -241,7 +280,7 @@ router.get("/:bookingId/guests/:guestId/id/:side", requireAuth, requireHotelScop
   }
 });
 
-router.post("/:id/guests", requireAuth, requireHotelScope, guestUpload.any(), async (req, res) => {
+router.post("/:id/guests", requireAuth, guestUploadLimiter, requireHotelScope, guestUpload.any(), async (req, res) => {
   try {
     const bookingId = parseIdParam(res, req.params.id);
     if (bookingId === null) return;
@@ -261,7 +300,7 @@ router.post("/:id/guests", requireAuth, requireHotelScope, guestUpload.any(), as
       keepFrontId?: boolean | string;
       keepBackId?: boolean | string;
     }>;
-    if (!Array.isArray(guests) || guests.length !== booking.numberOfPersons || guests.length > 12) {
+    if (!Array.isArray(guests) || guests.length !== booking.numberOfPersons || guests.length > MAX_GUESTS) {
       res.status(400).json({ error: "Bad Request", message: "Guest details must match the number of persons" });
       return;
     }
