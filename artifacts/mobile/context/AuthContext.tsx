@@ -1,6 +1,13 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
 import React, { createContext, useContext, useEffect, useState, useMemo, ReactNode } from "react";
+import {
+  getAuthToken,
+  setAuthToken,
+  clearAuthToken,
+  getCachedUser,
+  setCachedUser,
+  clearCachedUser,
+} from "@/lib/secureStorage";
 
 export type UserRole = "admin" | "owner" | "manager";
 
@@ -44,19 +51,49 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function loadStoredAuth() {
     try {
-      const [storedToken, storedUser] = await Promise.all([
-        AsyncStorage.getItem("auth_token"),
-        AsyncStorage.getItem("auth_user"),
-      ]);
-      if (storedToken && storedUser) {
-        setToken(storedToken);
-        setUser(JSON.parse(storedUser));
+      const storedToken = await getAuthToken();
+      if (!storedToken) return;
+
+      // Render immediately from the cached profile, but never trust it: the
+      // cache is editable on web, and role drives which screens are shown.
+      const cached = await getCachedUser();
+      if (cached) {
+        try {
+          setUser(JSON.parse(cached));
+        } catch {
+          await clearCachedUser();
+        }
+      }
+      setToken(storedToken);
+
+      // The server is the authority on who this token belongs to and what
+      // role it carries. A rejected token means the session is over.
+      const res = await fetch(`${BASE_URL}/api/auth/me`, {
+        headers: { Authorization: `Bearer ${storedToken}` },
+      });
+      if (res.status === 401) {
+        await clearSession();
+        return;
+      }
+      if (res.ok) {
+        const fresh: AuthUser = await res.json();
+        setUser(fresh);
+        await setCachedUser(JSON.stringify(fresh));
       }
     } catch (e) {
+      // Offline: keep the cached profile so the app still opens. Every request
+      // is still authorised server-side, so a stale cache grants nothing.
       console.error("Failed to load auth:", e);
     } finally {
       setIsLoading(false);
     }
+  }
+
+  async function clearSession() {
+    await clearAuthToken();
+    await clearCachedUser();
+    setToken(null);
+    setUser(null);
   }
 
   async function login(email: string, password: string) {
@@ -66,20 +103,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       body: JSON.stringify({ email, password }),
     });
     if (!res.ok) {
-      const body = await res.json();
+      const body = await res.json().catch(() => ({}));
       throw new Error(body?.message ?? "Login failed");
     }
     const data = await res.json();
-    await AsyncStorage.setItem("auth_token", data.token);
-    await AsyncStorage.setItem("auth_user", JSON.stringify(data.user));
+    await setAuthToken(data.token);
+    await setCachedUser(JSON.stringify(data.user));
     setToken(data.token);
     setUser(data.user);
   }
 
   async function logout() {
-    await AsyncStorage.multiRemove(["auth_token", "auth_user"]);
-    setToken(null);
-    setUser(null);
+    await clearSession();
     router.replace("/login");
   }
 
