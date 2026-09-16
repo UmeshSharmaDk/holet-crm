@@ -69,15 +69,55 @@ function HotelsTab() {
   });
 
   const deleteMut = useMutation({
-    mutationFn: (id: number) => api.delete(`/hotels/${id}`),
+    mutationFn: ({ id, confirm }: { id: number; confirm?: string }) =>
+      api.delete(`/hotels/${id}`, confirm ? { confirm } : undefined),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["hotels"] }),
     onError: (e: any) => Alert.alert("Error", e.message),
   });
 
+  /**
+   * Two steps when the hotel has history.
+   *
+   * The first attempt carries no confirmation. If the hotel holds bookings,
+   * agencies or guest ID scans the server refuses and reports exactly what
+   * would be destroyed, which is then shown before anything is removed —
+   * rather than the previous generic warning that could not say how much was
+   * at stake.
+   */
   function confirmDelete(h: Hotel) {
-    Alert.alert("Delete Hotel", `Delete "${h.name}"? All bookings will be removed.`, [
+    Alert.alert("Delete Hotel", `Delete "${h.name}"?`, [
       { text: "Cancel", style: "cancel" },
-      { text: "Delete", style: "destructive", onPress: () => deleteMut.mutate(h.id) },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await deleteMut.mutateAsync({ id: h.id });
+            return;
+          } catch (e: any) {
+            if (e?.status !== 409 || !e?.data?.confirmationRequired) {
+              Alert.alert("Error", e?.message ?? "Delete failed");
+              return;
+            }
+            const impact = e.data.impact ?? {};
+            Alert.alert(
+              "This cannot be undone",
+              `"${h.name}" holds ${impact.bookings ?? 0} booking(s), ` +
+                `${impact.agencies ?? 0} agency record(s) and ` +
+                `${impact.guestIdScans ?? 0} stored guest ID scan(s).\n\n` +
+                `All of it will be permanently deleted.`,
+              [
+                { text: "Keep hotel", style: "cancel" },
+                {
+                  text: "Delete everything",
+                  style: "destructive",
+                  onPress: () => deleteMut.mutate({ id: h.id, confirm: h.name }),
+                },
+              ],
+            );
+          }
+        },
+      },
     ]);
   }
 
