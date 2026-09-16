@@ -88,6 +88,24 @@ export interface CreateHotelRequest {
   totalRooms: number;
 }
 
+export interface DeleteHotelRequest {
+  /** The hotel's exact name, required when it holds records. */
+  confirm?: string;
+}
+
+export type DeleteHotelConflictImpact = {
+  bookings: number;
+  agencies: number;
+  guestIdScans: number;
+};
+
+export interface DeleteHotelConflict {
+  error: string;
+  message: string;
+  confirmationRequired: boolean;
+  impact: DeleteHotelConflictImpact;
+}
+
 export interface Agency {
   id: number;
   name: string;
@@ -128,8 +146,8 @@ export interface Booking {
   guestName: string;
   guestEmail?: string | null;
   guestPhone?: string | null;
-  roomNumber?: string | null;
-  roomType?: string | null;
+  numberOfRooms?: number;
+  numberOfPersons?: number;
   checkIn: string;
   checkOut: string;
   roomRent: number;
@@ -167,8 +185,8 @@ export interface CreateBookingRequest {
   guestName: string;
   guestEmail?: string | null;
   guestPhone?: string | null;
-  roomNumber?: string | null;
-  roomType?: string | null;
+  numberOfRooms?: number;
+  numberOfPersons?: number;
   checkIn: string;
   checkOut: string;
   roomRent: number;
@@ -194,8 +212,8 @@ export interface UpdateBookingRequest {
   guestName?: string;
   guestEmail?: string | null;
   guestPhone?: string | null;
-  roomNumber?: string | null;
-  roomType?: string | null;
+  numberOfRooms?: number;
+  numberOfPersons?: number;
   checkIn?: string;
   checkOut?: string;
   roomRent?: number;
@@ -220,17 +238,17 @@ export interface DashboardStats {
   monthlyRevenue: number;
 }
 
-export type OccupancyStatsDailyOccupancyItem = {
-  date: string;
-  occupiedRooms: number;
-  totalRooms: number;
-  percentage: number;
-};
-
 export interface OccupancyStats {
-  dailyOccupancy: OccupancyStatsDailyOccupancyItem[];
-  averageOccupancy: number;
+  month: number;
+  year: number;
+  daysInMonth: number;
   totalRooms: number;
+  roomNights: number;
+  averageOccupiedRooms: number;
+  occupancyPercentage: number;
+  bookingsCount: number;
+  totalRoomsBooked: number;
+  totalPersons: number;
 }
 
 export type RevenueStatsMonthlyRevenueItem = {

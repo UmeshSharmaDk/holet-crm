@@ -115,10 +115,18 @@ export const UpdateHotelResponse = zod.object({
 });
 
 /**
+ * Bookings and agencies cascade from a hotel, and guest rosters cascade from bookings, so this removes the hotel's entire history including any stored identity documents. A hotel holding records is refused with 409 unless the request confirms the hotel's exact name; the refusal reports what would be destroyed. An empty hotel deletes without confirmation.
  * @summary Delete a hotel
  */
 export const DeleteHotelParams = zod.object({
   id: zod.coerce.number(),
+});
+
+export const DeleteHotelBody = zod.object({
+  confirm: zod
+    .string()
+    .optional()
+    .describe("The hotel's exact name, required when it holds records."),
 });
 
 /**
@@ -151,6 +159,30 @@ export const CreateUserBody = zod.object({
   password: zod.string(),
   role: zod.enum(["admin", "owner", "manager"]),
   hotelId: zod.number().nullish(),
+});
+
+/**
+ * @summary Get a user by ID (admin only)
+ */
+export const GetUserParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetUserResponse = zod.object({
+  id: zod.number(),
+  email: zod.string(),
+  name: zod.string(),
+  role: zod.enum(["admin", "owner", "manager"]),
+  hotelId: zod.number().nullish(),
+  hotel: zod
+    .object({
+      id: zod.number(),
+      name: zod.string(),
+      totalRooms: zod.number(),
+      createdAt: zod.date(),
+    })
+    .nullish(),
+  createdAt: zod.date(),
 });
 
 /**
@@ -216,6 +248,22 @@ export const CreateAgencyBody = zod.object({
 });
 
 /**
+ * @summary Get an agency by ID
+ */
+export const GetAgencyParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetAgencyResponse = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  contactEmail: zod.string().nullish(),
+  contactPhone: zod.string().nullish(),
+  hotelId: zod.number(),
+  createdAt: zod.date(),
+});
+
+/**
  * @summary Update an agency
  */
 export const UpdateAgencyParams = zod.object({
@@ -260,8 +308,8 @@ export const ListBookingsResponseItem = zod.object({
   guestName: zod.string(),
   guestEmail: zod.string().nullish(),
   guestPhone: zod.string().nullish(),
-  roomNumber: zod.string().nullish(),
-  roomType: zod.string().nullish(),
+  numberOfRooms: zod.number().optional(),
+  numberOfPersons: zod.number().optional(),
   checkIn: zod.date(),
   checkOut: zod.date(),
   roomRent: zod.number(),
@@ -316,8 +364,8 @@ export const CreateBookingBody = zod.object({
   guestName: zod.string(),
   guestEmail: zod.string().nullish(),
   guestPhone: zod.string().nullish(),
-  roomNumber: zod.string().nullish(),
-  roomType: zod.string().nullish(),
+  numberOfRooms: zod.number().optional(),
+  numberOfPersons: zod.number().optional(),
   checkIn: zod.date(),
   checkOut: zod.date(),
   roomRent: zod.number(),
@@ -341,8 +389,8 @@ export const GetBookingResponse = zod.object({
   guestName: zod.string(),
   guestEmail: zod.string().nullish(),
   guestPhone: zod.string().nullish(),
-  roomNumber: zod.string().nullish(),
-  roomType: zod.string().nullish(),
+  numberOfRooms: zod.number().optional(),
+  numberOfPersons: zod.number().optional(),
   checkIn: zod.date(),
   checkOut: zod.date(),
   roomRent: zod.number(),
@@ -400,8 +448,8 @@ export const UpdateBookingBody = zod.object({
   guestName: zod.string().optional(),
   guestEmail: zod.string().nullish(),
   guestPhone: zod.string().nullish(),
-  roomNumber: zod.string().nullish(),
-  roomType: zod.string().nullish(),
+  numberOfRooms: zod.number().optional(),
+  numberOfPersons: zod.number().optional(),
   checkIn: zod.date().optional(),
   checkOut: zod.date().optional(),
   roomRent: zod.number().optional(),
@@ -419,8 +467,8 @@ export const UpdateBookingResponse = zod.object({
   guestName: zod.string(),
   guestEmail: zod.string().nullish(),
   guestPhone: zod.string().nullish(),
-  roomNumber: zod.string().nullish(),
-  roomType: zod.string().nullish(),
+  numberOfRooms: zod.number().optional(),
+  numberOfPersons: zod.number().optional(),
   checkIn: zod.date(),
   checkOut: zod.date(),
   roomRent: zod.number(),
@@ -490,8 +538,8 @@ export const UpdatePaymentResponse = zod.object({
   guestName: zod.string(),
   guestEmail: zod.string().nullish(),
   guestPhone: zod.string().nullish(),
-  roomNumber: zod.string().nullish(),
-  roomType: zod.string().nullish(),
+  numberOfRooms: zod.number().optional(),
+  numberOfPersons: zod.number().optional(),
   checkIn: zod.date(),
   checkOut: zod.date(),
   roomRent: zod.number(),
@@ -550,6 +598,16 @@ export const SaveBookingGuestsBody = zod.object({
 });
 
 /**
+ * Returns the raw image. The content type is taken from a fixed image allowlist rather than the value supplied at upload, and the response carries X-Content-Type-Options nosniff and Cache-Control private, no-store. Scoped to the booking's hotel; a booking belonging to another hotel answers 404 rather than 403 so ids cannot be enumerated.
+ * @summary Retrieve a stored guest identity document
+ */
+export const GetGuestIdScanParams = zod.object({
+  bookingId: zod.coerce.number(),
+  guestId: zod.coerce.number(),
+  side: zod.enum(["front", "back"]),
+});
+
+/**
  * @summary Get dashboard stats
  */
 export const GetDashboardStatsQueryParams = zod.object({
@@ -578,8 +636,8 @@ export const GetTodayCheckinsResponseItem = zod.object({
   guestName: zod.string(),
   guestEmail: zod.string().nullish(),
   guestPhone: zod.string().nullish(),
-  roomNumber: zod.string().nullish(),
-  roomType: zod.string().nullish(),
+  numberOfRooms: zod.number().optional(),
+  numberOfPersons: zod.number().optional(),
   checkIn: zod.date(),
   checkOut: zod.date(),
   roomRent: zod.number(),
@@ -639,8 +697,8 @@ export const GetTodayCheckoutsResponseItem = zod.object({
   guestName: zod.string(),
   guestEmail: zod.string().nullish(),
   guestPhone: zod.string().nullish(),
-  roomNumber: zod.string().nullish(),
-  roomType: zod.string().nullish(),
+  numberOfRooms: zod.number().optional(),
+  numberOfPersons: zod.number().optional(),
   checkIn: zod.date(),
   checkOut: zod.date(),
   roomRent: zod.number(),
@@ -702,8 +760,8 @@ export const GetDashboardForecastResponseItem = zod.object({
   guestName: zod.string(),
   guestEmail: zod.string().nullish(),
   guestPhone: zod.string().nullish(),
-  roomNumber: zod.string().nullish(),
-  roomType: zod.string().nullish(),
+  numberOfRooms: zod.number().optional(),
+  numberOfPersons: zod.number().optional(),
   checkIn: zod.date(),
   checkOut: zod.date(),
   roomRent: zod.number(),
@@ -763,16 +821,16 @@ export const GetOccupancyStatsQueryParams = zod.object({
 });
 
 export const GetOccupancyStatsResponse = zod.object({
-  dailyOccupancy: zod.array(
-    zod.object({
-      date: zod.string(),
-      occupiedRooms: zod.number(),
-      totalRooms: zod.number(),
-      percentage: zod.number(),
-    }),
-  ),
-  averageOccupancy: zod.number(),
+  month: zod.number(),
+  year: zod.number(),
+  daysInMonth: zod.number(),
   totalRooms: zod.number(),
+  roomNights: zod.number(),
+  averageOccupiedRooms: zod.number(),
+  occupancyPercentage: zod.number(),
+  bookingsCount: zod.number(),
+  totalRoomsBooked: zod.number(),
+  totalPersons: zod.number(),
 });
 
 /**

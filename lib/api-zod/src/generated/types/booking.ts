@@ -15,8 +15,8 @@ export interface Booking {
   guestName: string;
   guestEmail?: string | null;
   guestPhone?: string | null;
-  roomNumber?: string | null;
-  roomType?: string | null;
+  numberOfRooms?: number;
+  numberOfPersons?: number;
   checkIn: Date;
   checkOut: Date;
   roomRent: number;
