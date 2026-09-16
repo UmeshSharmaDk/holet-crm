@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db, bookingsTable, bookingGuestsTable, agenciesTable, hotelsTable, usersTable } from "@workspace/db";
-import { eq, and, between, sql } from "drizzle-orm";
+import { eq, and, between, gte, sql } from "drizzle-orm";
 import { requireAuth, requireOwnerOrAdmin } from "../middlewares/auth.js";
 import { requireHotelScope, hotelFilter, denyOutOfScope, type HotelScope } from "../lib/scope.js";
 import {
@@ -477,24 +477,61 @@ router.put("/:id", requireAuth, requireHotelScope, async (req, res) => {
       changes.push({ field: "Receipt", oldValue: `₹${existing.receipt}`, newValue: `₹${rc}` });
     }
 
-    const [updated] = await db.update(bookingsTable).set({
-      guestName: guestName !== undefined ? text(guestName, "guestName", 200) : existing.guestName,
-      guestEmail: guestEmail !== undefined ? optionalEmail(guestEmail, "guestEmail") : existing.guestEmail,
-      guestPhone: guestPhone !== undefined ? optionalText(guestPhone, "guestPhone", 40) : existing.guestPhone,
-      numberOfRooms: numberOfRooms !== undefined ? count(numberOfRooms, "numberOfRooms", existing.numberOfRooms) : existing.numberOfRooms,
-      numberOfPersons: numberOfPersons !== undefined ? count(numberOfPersons, "numberOfPersons", existing.numberOfPersons) : existing.numberOfPersons,
-      checkIn: nextCheckIn,
-      checkOut: nextCheckOut,
-      roomRent: String(rr),
-      addOns: String(ao),
-      totalCost: String(totalCost),
-      receipt: String(rc),
-      balance: String(balance),
-      notes: notes !== undefined ? optionalText(notes, "notes", 2000) : existing.notes,
-      status: status !== undefined ? oneOf(status, "status", BOOKING_STATUSES) : existing.status,
-      agencyId: nextAgencyId,
-      updatedAt: new Date(),
-    }).where(eq(bookingsTable.id, bookingId)).returning();
+    const nextPersons = numberOfPersons !== undefined
+      ? count(numberOfPersons, "numberOfPersons", existing.numberOfPersons)
+      : existing.numberOfPersons;
+
+    /**
+     * Reducing the party size must take the surplus roster with it.
+     *
+     * Saving a roster requires guests.length === booking.numberOfPersons, but
+     * the count could previously be lowered here without touching
+     * booking_guests. The rows for people no longer on the booking stayed —
+     * and with them their identity documents, retained indefinitely for guests
+     * the booking no longer records. personIndex is zero-based, so anything at
+     * or beyond the new count is now surplus.
+     *
+     * Done in one transaction with the update so a booking can never be left
+     * disagreeing with its own roster.
+     */
+    const [updated] = await db.transaction(async (tx) => {
+      const [row] = await tx.update(bookingsTable).set({
+        guestName: guestName !== undefined ? text(guestName, "guestName", 200) : existing.guestName,
+        guestEmail: guestEmail !== undefined ? optionalEmail(guestEmail, "guestEmail") : existing.guestEmail,
+        guestPhone: guestPhone !== undefined ? optionalText(guestPhone, "guestPhone", 40) : existing.guestPhone,
+        numberOfRooms: numberOfRooms !== undefined ? count(numberOfRooms, "numberOfRooms", existing.numberOfRooms) : existing.numberOfRooms,
+        numberOfPersons: nextPersons,
+        checkIn: nextCheckIn,
+        checkOut: nextCheckOut,
+        roomRent: String(rr),
+        addOns: String(ao),
+        totalCost: String(totalCost),
+        receipt: String(rc),
+        balance: String(balance),
+        notes: notes !== undefined ? optionalText(notes, "notes", 2000) : existing.notes,
+        status: status !== undefined ? oneOf(status, "status", BOOKING_STATUSES) : existing.status,
+        agencyId: nextAgencyId,
+        updatedAt: new Date(),
+      }).where(eq(bookingsTable.id, bookingId)).returning();
+
+      if (nextPersons < existing.numberOfPersons) {
+        const removed = await tx
+          .delete(bookingGuestsTable)
+          .where(and(
+            eq(bookingGuestsTable.bookingId, bookingId),
+            gte(bookingGuestsTable.personIndex, nextPersons),
+          ))
+          .returning({ id: bookingGuestsTable.id });
+
+        if (removed.length > 0) {
+          console.log(
+            `[bookings] booking ${bookingId} reduced from ${existing.numberOfPersons} to ${nextPersons} persons; removed ${removed.length} guest record(s) and any ID scans held for them`,
+          );
+        }
+      }
+
+      return [row];
+    });
 
     if (changes.length > 0) {
       const owners = await db
