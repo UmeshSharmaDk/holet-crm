@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: holet_test
+        ports:
+          - 5432:5432
+        # Without this the job races the container and the first query fails.
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/holet_test
+      JWT_SECRET: ci-only-secret-not-used-anywhere-real
+      NODE_ENV: test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          # Pinned to the version that generated pnpm-lock.yaml. The action has
+          # no default and fails outright without either this or a
+          # packageManager field in the root package.json.
+          version: 10.33.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm run typecheck
+
+      - name: Apply schema
+        run: pnpm --filter @workspace/db exec drizzle-kit push --config ./drizzle.config.ts --force
+
+      - name: Test
+        run: pnpm --filter @workspace/api-server run test
+
+      # Scoped to the API server deliberately. The mobile Expo bundle builds
+      # locally but fails in CI with an HTTP 500 out of Metro — tracked
+      # separately rather than left as a permanently red check here, and rather
+      # than hidden behind continue-on-error, which would make this check green
+      # while the build was broken.
+      - name: Build
+        run: pnpm --filter @workspace/api-server run build

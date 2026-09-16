@@ -10,10 +10,30 @@ import { Response } from "express";
  * write to.
  */
 
+/**
+ * A whole positive number and nothing else.
+ *
+ * `Number.parseInt` stops at the first character it cannot read, so "1.5.2",
+ * "1abc" and " 1" all become 1 — an id the caller never asked for, silently
+ * substituted. Matching the whole string first means malformed input is
+ * rejected instead of quietly resolving to a different record.
+ */
+const POSITIVE_INTEGER = /^[0-9]+$/;
+
+function toPositiveInteger(raw: unknown): number | null {
+  if (typeof raw === "number") {
+    return Number.isSafeInteger(raw) && raw > 0 ? raw : null;
+  }
+  const text = String(raw ?? "").trim();
+  if (!POSITIVE_INTEGER.test(text)) return null;
+  const value = Number(text);
+  return Number.isSafeInteger(value) && value > 0 ? value : null;
+}
+
 /** Parses a positive integer route param; replies 400 and returns null if invalid. */
 export function parseIdParam(res: Response, raw: unknown, field = "id"): number | null {
-  const value = Number.parseInt(String(raw), 10);
-  if (!Number.isInteger(value) || value <= 0) {
+  const value = toPositiveInteger(raw);
+  if (value === null) {
     res.status(400).json({ error: "Bad Request", message: `${field} must be a positive integer` });
     return null;
   }
@@ -24,8 +44,7 @@ export function parseIdParam(res: Response, raw: unknown, field = "id"): number 
 export function parseOptionalId(raw: unknown): number | null | undefined {
   if (raw === undefined) return undefined;
   if (raw === null || raw === "" || raw === "null") return null;
-  const value = Number.parseInt(String(raw), 10);
-  return Number.isInteger(value) && value > 0 ? value : undefined;
+  return toPositiveInteger(raw) ?? undefined;
 }
 
 export class ValidationError extends Error {}
