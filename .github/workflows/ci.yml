@@ -61,10 +61,5 @@ jobs:
       - name: Test
         run: pnpm --filter @workspace/api-server run test
 
-      # Scoped to the API server deliberately. The mobile Expo bundle builds
-      # locally but fails in CI with an HTTP 500 out of Metro — tracked
-      # separately rather than left as a permanently red check here, and rather
-      # than hidden behind continue-on-error, which would make this check green
-      # while the build was broken.
       - name: Build
-        run: pnpm --filter @workspace/api-server run build
+        run: pnpm run build

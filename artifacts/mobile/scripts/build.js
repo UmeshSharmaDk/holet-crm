@@ -188,7 +188,23 @@ async function downloadFile(url, outputPath) {
     const response = await fetch(url, { signal: controller.signal });
 
     if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
+      /**
+       * Metro reports why a bundle failed in the response body. Throwing on the
+       * status alone discarded it, so a build failure surfaced as a bare
+       * "HTTP 500" with no indication of which module or transform was at
+       * fault — which is exactly when the detail matters most.
+       */
+      const detail = await response.text().catch(() => "");
+      let message = detail.trim();
+      try {
+        const parsed = JSON.parse(detail);
+        message = [parsed.message, parsed.name, parsed.type].filter(Boolean).join(" — ") || message;
+      } catch {
+        // Not JSON; Metro sometimes returns HTML or plain text.
+      }
+      throw new Error(
+        `HTTP ${response.status}${message ? `\n\nMetro reported:\n${message.slice(0, 4000)}` : ""}`,
+      );
     }
 
     const file = fs.createWriteStream(outputPath);
