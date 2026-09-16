@@ -145,9 +145,6 @@ importers:
       '@types/nodemailer':
         specifier: ^7.0.11
         version: 7.0.11
-      drizzle-kit:
-        specifier: ^0.31.9
-        version: 0.31.9
       esbuild:
         specifier: ^0.27.3
         version: 0.27.3
@@ -166,6 +163,9 @@ importers:
       expo-file-system:
         specifier: ^55.0.16
         version: 55.0.16(expo@54.0.33)(react-native@0.81.5(@babel/core@7.29.0)(@types/react@18.3.29)(react@19.1.0))
+      expo-secure-store:
+        specifier: ^57.0.4
+        version: 57.0.4(expo@54.0.33)
       react-native-chart-kit:
         specifier: ^6.12.0
         version: 6.12.0(react-native-svg@15.12.1(react-native@0.81.5(@babel/core@7.29.0)(@types/react@18.3.29)(react@19.1.0))(react@19.1.0))(react-native@0.81.5(@babel/core@7.29.0)(@types/react@18.3.29)(react@19.1.0))(react@19.1.0)
@@ -4166,6 +4166,11 @@ packages:
         optional: true
       react-server-dom-webpack:
         optional: true
+
+  expo-secure-store@57.0.4:
+    resolution: {integrity: sha512-7zBA1RThURTXdP4w65kBzZNbcSsfArqVd+p+ETAnPRWXO8J296Qd0YaCVyRpJ0HSwlCnGdvOnqO+NgSreHsOhA==}
+    peerDependencies:
+      expo: '*'
 
   expo-server@1.0.5:
     resolution: {integrity: sha512-IGR++flYH70rhLyeXF0Phle56/k4cee87WeQ4mamS+MkVAVP+dDlOHf2nN06Z9Y2KhU0Gp1k+y61KkghF7HdhA==}
@@ -10397,6 +10402,10 @@ snapshots:
       - '@types/react'
       - '@types/react-dom'
       - supports-color
+
+  expo-secure-store@57.0.4(expo@54.0.33):
+    dependencies:
+      expo: 54.0.33(@babel/core@7.29.0)(@expo/metro-runtime@6.1.2)(expo-router@6.0.23)(react-native@0.81.5(@babel/core@7.29.0)(@types/react@18.3.29)(react@19.1.0))(react@19.1.0)
 
   expo-server@1.0.5: {}
 

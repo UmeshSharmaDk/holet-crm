@@ -97,24 +97,40 @@ GET    /api/analytics/revenue
 ## Database Schema (`lib/db/src/schema/`)
 
 - `hotels`: id, name, totalRooms, createdAt
-- `users`: id, email, name, passwordHash, role (enum: admin/owner/manager), hotelId FK, createdAt
+- `users`: id, email, name, passwordHash, role (enum: admin/owner/manager), hotelId FK, tokenVersion, createdAt
 - `agencies`: id, name, contactEmail, contactPhone, hotelId FK, createdAt
-- `bookings`: id, guestName, guestEmail, guestPhone, roomNumber, roomType, checkIn, checkOut, roomRent, addOns, totalCost (auto-calc), receipt, balance (auto-calc), status (enum: confirmed/checked_in/checked_out/cancelled), notes, hotelId FK, agencyId FK, createdAt
+- `bookings`: id, guestName, guestEmail, guestPhone, numberOfRooms, numberOfPersons, checkIn, checkOut, roomRent, addOns, totalCost (auto-calc), receipt, balance (auto-calc), status (enum: confirmed/checked_in/checked_out/cancelled), notes, hotelId FK, agencyId FK, createdAt
 
-## Demo Credentials (seeded)
+## Seeding the first administrator
+
+There are no built-in or demo credentials. `scripts/src/seed.ts` reads the
+account to create from the environment and refuses to run without it:
 
 ```
-admin@hotel.com / admin123    (role: admin)
-owner@hotel.com / owner123    (role: owner, hotel: Grand Palace Hotel)
-manager@hotel.com / manager123 (role: manager, hotel: Grand Palace Hotel)
+SEED_ADMIN_EMAIL=you@example.com SEED_ADMIN_PASSWORD='<at least 12 chars>' pnpm --filter @workspace/scripts exec tsx src/seed.ts
 ```
+
+If this database was ever seeded by an older revision of that script, treat
+every account it created as compromised — the passwords are in git history —
+and rotate them.
 
 ## Environment Variables
 
 - `DATABASE_URL` — PostgreSQL connection (auto-provided by Replit)
 - `JWT_SECRET` — JWT signing secret (auto-provided or set manually)
+- `JWT_EXPIRES_IN` — session token lifetime (default `12h`)
+- `DATABASE_CA_CERT` — PEM certificate authority for the database TLS connection
+- `DATABASE_SSL_REJECT_UNAUTHORIZED` — set to `false` only to disable database
+  certificate verification; leaves the connection open to interception
+- `TRUST_PROXY_HOPS` — number of reverse proxies in front of the API (default `1`).
+  Must match the deployment, or rate limiting either collapses to one shared
+  bucket or becomes bypassable via `X-Forwarded-For`
+- `RATE_LIMIT_MAX`, `LOGIN_RATE_LIMIT_MAX`, `AI_RATE_LIMIT_PER_MINUTE` — request budgets
+- `SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD`, `SEED_ADMIN_NAME` — first admin account
 - `SMTP_USER`, `SMTP_PASS`, `SMTP_HOST`, `SMTP_PORT` — optional email notifications
 - `EXPO_PUBLIC_DOMAIN` — auto-set by Expo workflow to `$REPLIT_DEV_DOMAIN`
+- `PUBLIC_HOST` — fallback hostname for the Expo landing page when the request
+  carries no valid Host header
 
 ## Key Business Rules
 
