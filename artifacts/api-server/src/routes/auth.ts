@@ -7,10 +7,19 @@ import { requireAuth } from "../middlewares/auth.js";
 
 const router = Router();
 
+/**
+ * A real bcrypt hash compared against when the email is unknown.
+ *
+ * Returning early for an unknown email made login measurably faster for
+ * addresses that do not exist, which is enough to enumerate valid accounts
+ * before mounting a password attack. Both paths now pay the same cost.
+ */
+const DUMMY_HASH = bcrypt.hashSync("holet-crm-invalid-credentials-placeholder", 12);
+
 router.post("/login", async (req, res) => {
   try {
-    const { email, password } = req.body;
-    if (!email || !password) {
+    const { email, password } = req.body ?? {};
+    if (typeof email !== "string" || typeof password !== "string" || !email || !password) {
       res.status(400).json({ error: "Bad Request", message: "Email and password are required" });
       return;
     }
@@ -23,18 +32,14 @@ router.post("/login", async (req, res) => {
         passwordHash: usersTable.passwordHash,
         role: usersTable.role,
         hotelId: usersTable.hotelId,
+        tokenVersion: usersTable.tokenVersion,
         createdAt: usersTable.createdAt,
       })
       .from(usersTable)
-      .where(eq(usersTable.email, email.toLowerCase()));
+      .where(eq(usersTable.email, email.trim().toLowerCase()));
 
-    if (!user) {
-      res.status(401).json({ error: "Unauthorized", message: "Invalid credentials" });
-      return;
-    }
-
-    const valid = await bcrypt.compare(password, user.passwordHash);
-    if (!valid) {
+    const valid = await bcrypt.compare(password, user?.passwordHash ?? DUMMY_HASH);
+    if (!user || !valid) {
       res.status(401).json({ error: "Unauthorized", message: "Invalid credentials" });
       return;
     }
@@ -44,6 +49,7 @@ router.post("/login", async (req, res) => {
       email: user.email,
       role: user.role,
       hotelId: user.hotelId,
+      tokenVersion: user.tokenVersion,
     });
 
     let hotel = null;
@@ -52,7 +58,7 @@ router.post("/login", async (req, res) => {
       hotel = h ?? null;
     }
 
-    const { passwordHash: _, ...userWithoutPassword } = user;
+    const { passwordHash: _, tokenVersion: __, ...userWithoutPassword } = user;
 
     res.json({ token, user: { ...userWithoutPassword, hotel } });
   } catch (error) {

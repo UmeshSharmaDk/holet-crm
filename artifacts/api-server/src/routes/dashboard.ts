@@ -2,6 +2,7 @@ import { Router } from "express";
 import { db, bookingsTable, hotelsTable } from "@workspace/db";
 import { eq, and, sql, count } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth.js";
+import { requireHotelScope, hotelFilter, type HotelScope } from "../lib/scope.js";
 
 const router = Router();
 
@@ -9,40 +10,40 @@ function todayStr() {
   return new Date().toISOString().split("T")[0];
 }
 
-router.get("/stats", requireAuth, async (req, res) => {
+router.get("/stats", requireAuth, requireHotelScope, async (req, res) => {
   try {
-    const { hotelId: queryHotelId } = req.query;
-    const effectiveHotelId = req.user?.role === "admin"
-      ? queryHotelId ? parseInt(queryHotelId as string) : undefined
-      : req.user?.hotelId ?? undefined;
+    const scope = req.hotelScope as HotelScope;
+    const effectiveHotelId = scope.kind === "hotel" ? scope.hotelId : undefined;
 
     const today = todayStr();
     const now = new Date();
     const firstOfMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
     const lastOfMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()).padStart(2, "0")}`;
 
-    const hotelCondition = effectiveHotelId ? eq(bookingsTable.hotelId, effectiveHotelId) : sql`1=1`;
+    // `undefined` means "every hotel", reachable only from an admin scope. The
+    // previous `1=1` fallback gave an unscoped tenant the same platform-wide view.
+    const hotelCondition = hotelFilter(scope, bookingsTable.hotelId);
 
     const [todayCheckins] = await db
       .select({ count: count() })
       .from(bookingsTable)
-      .where(and(hotelCondition as any, eq(bookingsTable.checkIn, today)));
+      .where(and(hotelCondition, eq(bookingsTable.checkIn, today)));
 
     const [todayCheckouts] = await db
       .select({ count: count() })
       .from(bookingsTable)
-      .where(and(hotelCondition as any, eq(bookingsTable.checkOut, today)));
+      .where(and(hotelCondition, eq(bookingsTable.checkOut, today)));
 
     const [totalBookings] = await db
       .select({ count: count() })
       .from(bookingsTable)
-      .where(hotelCondition as any);
+      .where(hotelCondition);
 
     const [occupiedResult] = await db
       .select({ total: sql<number>`coalesce(sum(${bookingsTable.numberOfRooms}), 0)` })
       .from(bookingsTable)
       .where(and(
-        hotelCondition as any,
+        hotelCondition,
         sql`${bookingsTable.checkIn} <= ${today}`,
         sql`${bookingsTable.checkOut} > ${today}`,
         sql`${bookingsTable.status} IN ('confirmed', 'checked_in')`
@@ -61,7 +62,7 @@ router.get("/stats", requireAuth, async (req, res) => {
       .select({ total: sql<number>`sum(cast(${bookingsTable.totalCost} as decimal))` })
       .from(bookingsTable)
       .where(and(
-        hotelCondition as any,
+        hotelCondition,
         sql`${bookingsTable.checkIn} >= ${firstOfMonth}`,
         sql`${bookingsTable.checkIn} <= ${lastOfMonth}`
       ));
@@ -84,16 +85,14 @@ router.get("/stats", requireAuth, async (req, res) => {
   }
 });
 
-router.get("/checkins", requireAuth, async (req, res) => {
+router.get("/checkins", requireAuth, requireHotelScope, async (req, res) => {
   try {
-    const { hotelId: queryHotelId } = req.query;
-    const effectiveHotelId = req.user?.role === "admin"
-      ? queryHotelId ? parseInt(queryHotelId as string) : undefined
-      : req.user?.hotelId ?? undefined;
+    const scope = req.hotelScope as HotelScope;
     const today = todayStr();
 
     const conditions: any[] = [eq(bookingsTable.checkIn, today)];
-    if (effectiveHotelId) conditions.push(eq(bookingsTable.hotelId, effectiveHotelId));
+    const scopeFilter = hotelFilter(scope, bookingsTable.hotelId);
+    if (scopeFilter) conditions.push(scopeFilter);
 
     const bookings = await db.select().from(bookingsTable).where(and(...conditions));
     res.json(bookings.map((b) => ({
@@ -110,16 +109,14 @@ router.get("/checkins", requireAuth, async (req, res) => {
   }
 });
 
-router.get("/checkouts", requireAuth, async (req, res) => {
+router.get("/checkouts", requireAuth, requireHotelScope, async (req, res) => {
   try {
-    const { hotelId: queryHotelId } = req.query;
-    const effectiveHotelId = req.user?.role === "admin"
-      ? queryHotelId ? parseInt(queryHotelId as string) : undefined
-      : req.user?.hotelId ?? undefined;
+    const scope = req.hotelScope as HotelScope;
     const today = todayStr();
 
     const conditions: any[] = [eq(bookingsTable.checkOut, today)];
-    if (effectiveHotelId) conditions.push(eq(bookingsTable.hotelId, effectiveHotelId));
+    const scopeFilter = hotelFilter(scope, bookingsTable.hotelId);
+    if (scopeFilter) conditions.push(scopeFilter);
 
     const bookings = await db.select().from(bookingsTable).where(and(...conditions));
     res.json(bookings.map((b) => ({
@@ -136,12 +133,9 @@ router.get("/checkouts", requireAuth, async (req, res) => {
   }
 });
 
-router.get("/forecast", requireAuth, async (req, res) => {
+router.get("/forecast", requireAuth, requireHotelScope, async (req, res) => {
   try {
-    const { hotelId: queryHotelId } = req.query;
-    const effectiveHotelId = req.user?.role === "admin"
-      ? queryHotelId ? parseInt(queryHotelId as string) : undefined
-      : req.user?.hotelId ?? undefined;
+    const scope = req.hotelScope as HotelScope;
     const today = todayStr();
     const forecastEnd = new Date(`${today}T00:00:00Z`);
     forecastEnd.setUTCDate(forecastEnd.getUTCDate() + 7);
@@ -152,7 +146,8 @@ router.get("/forecast", requireAuth, async (req, res) => {
       sql`${bookingsTable.checkIn} <= ${forecastEndStr}`,
       sql`${bookingsTable.status} IN ('confirmed', 'checked_in')`,
     ];
-    if (effectiveHotelId) conditions.push(eq(bookingsTable.hotelId, effectiveHotelId));
+    const scopeFilter = hotelFilter(scope, bookingsTable.hotelId);
+    if (scopeFilter) conditions.push(scopeFilter);
 
     const bookings = await db
       .select()

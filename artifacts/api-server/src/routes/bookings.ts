@@ -2,6 +2,21 @@ import { Router } from "express";
 import { db, bookingsTable, bookingGuestsTable, agenciesTable, hotelsTable, usersTable } from "@workspace/db";
 import { eq, and, between, sql } from "drizzle-orm";
 import { requireAuth, requireOwnerOrAdmin } from "../middlewares/auth.js";
+import { requireHotelScope, hotelFilter, denyOutOfScope, type HotelScope } from "../lib/scope.js";
+import {
+  parseIdParam,
+  parseOptionalId,
+  money,
+  count,
+  isoDate,
+  text,
+  optionalText,
+  optionalEmail,
+  oneOf,
+  BOOKING_STATUSES,
+  ValidationError,
+  handleValidationError,
+} from "../lib/validate.js";
 import { sendBookingUpdateEmail, BookingComparison } from "../lib/email.js";
 import multer from "multer";
 
@@ -10,7 +25,9 @@ const guestUpload = multer({
   storage: multer.memoryStorage(),
   limits: { files: 24, fileSize: 8 * 1024 * 1024 },
   fileFilter: (_req, file, callback) => {
-    callback(null, file.mimetype.startsWith("image/"));
+    // Declared by the client, so it gates storage only; what is served back is
+    // re-checked against the same allowlist on the way out.
+    callback(null, ID_IMAGE_MIME.has(file.mimetype));
   },
 });
 
@@ -20,105 +37,172 @@ function calcTotalAndBalance(roomRent: number, addOns: number, receipt: number) 
   return { totalCost, balance };
 }
 
-async function enrichBooking(booking: any, includeGuests = false) {
-  let agency = null;
-  let hotel = null;
-  if (booking.agencyId) {
-    const [a] = await db.select().from(agenciesTable).where(eq(agenciesTable.id, booking.agencyId));
-    agency = a ?? null;
-  }
-  if (booking.hotelId) {
-    const [h] = await db.select().from(hotelsTable).where(eq(hotelsTable.id, booking.hotelId));
-    hotel = h ?? null;
-  }
-  const guests = includeGuests
-    ? await db
-      .select({
-        id: bookingGuestsTable.id,
-        personIndex: bookingGuestsTable.personIndex,
-        name: bookingGuestsTable.name,
-        dateOfBirth: bookingGuestsTable.dateOfBirth,
-        relation: bookingGuestsTable.relation,
-        hasFrontId: sql<boolean>`${bookingGuestsTable.frontIdData} IS NOT NULL`,
-        hasBackId: sql<boolean>`${bookingGuestsTable.backIdData} IS NOT NULL`,
-      })
-      .from(bookingGuestsTable)
-      .where(eq(bookingGuestsTable.bookingId, booking.id))
-      .orderBy(bookingGuestsTable.personIndex)
-    : undefined;
+/**
+ * Bookings joined to their agency and hotel in a single round-trip. The old
+ * per-booking lookups meant a 500-row list issued ~1000 queries against a pool
+ * of 20.
+ */
+function bookingQuery() {
+  return db
+    .select({ booking: bookingsTable, agency: agenciesTable, hotel: hotelsTable })
+    .from(bookingsTable)
+    .leftJoin(agenciesTable, eq(bookingsTable.agencyId, agenciesTable.id))
+    .leftJoin(hotelsTable, eq(bookingsTable.hotelId, hotelsTable.id));
+}
 
+type BookingRow = Awaited<ReturnType<typeof bookingQuery>>[number];
+
+function shapeBooking(row: BookingRow) {
+  const b = row.booking;
   return {
-    ...booking,
-    roomRent: parseFloat(booking.roomRent),
-    addOns: parseFloat(booking.addOns),
-    totalCost: parseFloat(booking.totalCost),
-    receipt: parseFloat(booking.receipt),
-    balance: parseFloat(booking.balance),
-    agency,
-    hotel,
-    ...(guests ? { guests } : {}),
+    ...b,
+    roomRent: parseFloat(b.roomRent),
+    addOns: parseFloat(b.addOns),
+    totalCost: parseFloat(b.totalCost),
+    receipt: parseFloat(b.receipt),
+    balance: parseFloat(b.balance),
+    agency: row.agency,
+    hotel: row.hotel,
   };
 }
 
-router.get("/", requireAuth, async (req, res) => {
+async function fetchBooking(id: number) {
+  const [row] = await bookingQuery().where(eq(bookingsTable.id, id));
+  return row ?? null;
+}
+
+/**
+ * Guest roster for a booking. The ID scans themselves are deliberately not
+ * selected — only whether one exists — so the blobs never ride along in a
+ * booking payload; they are fetched one at a time through the guarded
+ * /guests/:guestId/id/:side route.
+ */
+async function fetchGuests(bookingId: number) {
+  return db
+    .select({
+      id: bookingGuestsTable.id,
+      personIndex: bookingGuestsTable.personIndex,
+      name: bookingGuestsTable.name,
+      dateOfBirth: bookingGuestsTable.dateOfBirth,
+      relation: bookingGuestsTable.relation,
+      hasFrontId: sql<boolean>`${bookingGuestsTable.frontIdData} IS NOT NULL`,
+      hasBackId: sql<boolean>`${bookingGuestsTable.backIdData} IS NOT NULL`,
+    })
+    .from(bookingGuestsTable)
+    .where(eq(bookingGuestsTable.bookingId, bookingId))
+    .orderBy(bookingGuestsTable.personIndex);
+}
+
+async function fetchBookingWithGuests(id: number) {
+  const row = await fetchBooking(id);
+  if (!row) return null;
+  return { ...shapeBooking(row), guests: await fetchGuests(id) };
+}
+
+/**
+ * An agency may only be attached to a booking of the same hotel. Without this
+ * a booking could be filed under another tenant's agency and pollute their
+ * revenue analytics.
+ */
+async function resolveAgencyId(agencyId: number | null, hotelId: number): Promise<number | null> {
+  if (agencyId == null) return null;
+  const [agency] = await db.select().from(agenciesTable).where(eq(agenciesTable.id, agencyId));
+  if (!agency || agency.hotelId !== hotelId) {
+    throw new ValidationError("agencyId does not belong to this hotel");
+  }
+  return agency.id;
+}
+
+router.get("/", requireAuth, requireHotelScope, async (req, res) => {
   try {
-    const { month, year, hotelId: queryHotelId, date, agencyId } = req.query;
-    const effectiveHotelId = req.user?.role === "admin"
-      ? queryHotelId ? parseInt(queryHotelId as string) : undefined
-      : req.user?.hotelId ?? undefined;
+    const { month, year, date, agencyId } = req.query;
+    const scope = req.hotelScope as HotelScope;
 
     const conditions: any[] = [];
-    if (effectiveHotelId) conditions.push(eq(bookingsTable.hotelId, effectiveHotelId));
+    const scopeFilter = hotelFilter(scope, bookingsTable.hotelId);
+    if (scopeFilter) conditions.push(scopeFilter);
+
     if (agencyId !== undefined) {
       const aid = agencyId as string;
       if (aid === "null" || aid === "direct" || aid === "") {
         conditions.push(sql`${bookingsTable.agencyId} IS NULL`);
       } else {
-        conditions.push(eq(bookingsTable.agencyId, parseInt(aid)));
+        const parsed = Number.parseInt(aid, 10);
+        if (!Number.isInteger(parsed) || parsed <= 0) {
+          res.status(400).json({ error: "Bad Request", message: "agencyId must be a positive integer" });
+          return;
+        }
+        conditions.push(eq(bookingsTable.agencyId, parsed));
       }
     }
 
     if (date) {
-      conditions.push(eq(bookingsTable.checkIn, date as string));
+      conditions.push(eq(bookingsTable.checkIn, isoDate(date, "date")));
     } else if (month && year) {
-      const m = parseInt(month as string);
-      const y = parseInt(year as string);
+      const m = Number.parseInt(month as string, 10);
+      const y = Number.parseInt(year as string, 10);
+      if (!Number.isInteger(m) || m < 1 || m > 12 || !Number.isInteger(y) || y < 1970 || y > 9999) {
+        res.status(400).json({ error: "Bad Request", message: "month must be 1-12 and year must be a valid year" });
+        return;
+      }
       const start = `${y}-${String(m).padStart(2, "0")}-01`;
       const endDate = new Date(y, m, 0);
       const end = `${y}-${String(m).padStart(2, "0")}-${String(endDate.getDate()).padStart(2, "0")}`;
       conditions.push(between(bookingsTable.checkIn, start, end));
     }
 
-    const bookings = conditions.length > 0
-      ? await db.select().from(bookingsTable).where(and(...conditions)).orderBy(bookingsTable.checkIn)
-      : await db.select().from(bookingsTable).orderBy(bookingsTable.checkIn);
+    const rows = conditions.length > 0
+      ? await bookingQuery().where(and(...conditions)).orderBy(bookingsTable.checkIn)
+      : await bookingQuery().orderBy(bookingsTable.checkIn);
 
-    const enriched = await Promise.all(bookings.map((booking) => enrichBooking(booking)));
-    res.json(enriched);
+    res.json(rows.map(shapeBooking));
   } catch (error) {
+    if (handleValidationError(res, error)) return;
     console.error(error);
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
 
-router.get("/:id", requireAuth, async (req, res) => {
+router.get("/:id", requireAuth, requireHotelScope, async (req, res) => {
   try {
-    const [booking] = await db.select().from(bookingsTable).where(eq(bookingsTable.id, parseInt(req.params.id as string)));
-    if (!booking) {
+    const bookingId = parseIdParam(res, req.params.id);
+    if (bookingId === null) return;
+
+    const row = await fetchBooking(bookingId);
+    if (!row) {
       res.status(404).json({ error: "Not Found" });
       return;
     }
-    res.json(await enrichBooking(booking, true));
+    if (denyOutOfScope(res, req.hotelScope as HotelScope, row.booking.hotelId)) return;
+
+    res.json({ ...shapeBooking(row), guests: await fetchGuests(bookingId) });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
 
-router.get("/:bookingId/guests/:guestId/id/:side", requireAuth, async (req, res) => {
+/**
+ * Guest ID scans are the most sensitive data the platform holds. The content
+ * type is taken from a fixed allowlist rather than the uploader's declared
+ * type, the filename is sanitised before it reaches a header, and nosniff is
+ * set — otherwise an upload declaring `image/svg+xml` would be served as
+ * script on the API origin.
+ */
+const ID_IMAGE_MIME = new Set(["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"]);
+
+function safeDownloadName(raw: string | null | undefined, fallback: string): string {
+  const cleaned = String(raw ?? "").replace(/[^A-Za-z0-9._-]/g, "_").slice(0, 100);
+  return cleaned || fallback;
+}
+
+router.get("/:bookingId/guests/:guestId/id/:side", requireAuth, requireHotelScope, async (req, res) => {
   try {
-    const bookingId = parseInt(req.params.bookingId as string);
-    const guestId = parseInt(req.params.guestId as string);
+    const bookingId = parseIdParam(res, req.params.bookingId, "bookingId");
+    if (bookingId === null) return;
+    const guestId = parseIdParam(res, req.params.guestId, "guestId");
+    if (guestId === null) return;
+
     const side = req.params.side === "front" ? "front" : req.params.side === "back" ? "back" : null;
     if (!side) {
       res.status(400).json({ error: "Bad Request", message: "ID side must be front or back" });
@@ -132,10 +216,7 @@ router.get("/:bookingId/guests/:guestId/id/:side", requireAuth, async (req, res)
       res.status(404).json({ error: "Not Found" });
       return;
     }
-    if (req.user?.role !== "admin" && req.user?.hotelId !== booking.hotelId) {
-      res.status(403).json({ error: "Forbidden" });
-      return;
-    }
+    if (denyOutOfScope(res, req.hotelScope as HotelScope, booking.hotelId)) return;
 
     const [guest] = await db.select().from(bookingGuestsTable).where(and(
       eq(bookingGuestsTable.id, guestId),
@@ -149,8 +230,10 @@ router.get("/:bookingId/guests/:guestId/id/:side", requireAuth, async (req, res)
       return;
     }
 
-    res.setHeader("Content-Type", mimeType ?? "image/jpeg");
-    res.setHeader("Content-Disposition", `inline; filename="${fileName ?? `${side}-id.jpg`}"`);
+    res.setHeader("Content-Type", mimeType && ID_IMAGE_MIME.has(mimeType) ? mimeType : "application/octet-stream");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("Content-Disposition", `inline; filename="${safeDownloadName(fileName, `${side}-id.jpg`)}"`);
+    res.setHeader("Cache-Control", "private, no-store");
     res.send(data);
   } catch (error) {
     console.error(error);
@@ -158,18 +241,17 @@ router.get("/:bookingId/guests/:guestId/id/:side", requireAuth, async (req, res)
   }
 });
 
-router.post("/:id/guests", requireAuth, guestUpload.any(), async (req, res) => {
+router.post("/:id/guests", requireAuth, requireHotelScope, guestUpload.any(), async (req, res) => {
   try {
-    const bookingId = parseInt(req.params.id as string);
+    const bookingId = parseIdParam(res, req.params.id);
+    if (bookingId === null) return;
+
     const [booking] = await db.select().from(bookingsTable).where(eq(bookingsTable.id, bookingId));
     if (!booking) {
       res.status(404).json({ error: "Not Found" });
       return;
     }
-    if (req.user?.role !== "admin" && req.user?.hotelId !== booking.hotelId) {
-      res.status(403).json({ error: "Forbidden" });
-      return;
-    }
+    if (denyOutOfScope(res, req.hotelScope as HotelScope, booking.hotelId)) return;
 
     const guests = JSON.parse(String(req.body.guests ?? "[]")) as Array<{
       personIndex: number;
@@ -183,10 +265,6 @@ router.post("/:id/guests", requireAuth, guestUpload.any(), async (req, res) => {
       res.status(400).json({ error: "Bad Request", message: "Guest details must match the number of persons" });
       return;
     }
-    if (guests.some((guest) => !guest.name?.trim() || !guest.relation?.trim())) {
-      res.status(400).json({ error: "Bad Request", message: "Each guest needs a name and relation" });
-      return;
-    }
 
     const existing = await db.select().from(bookingGuestsTable).where(eq(bookingGuestsTable.bookingId, bookingId));
     const existingByIndex = new Map(existing.map((guest) => [guest.personIndex, guest]));
@@ -195,7 +273,12 @@ router.post("/:id/guests", requireAuth, guestUpload.any(), async (req, res) => {
     );
 
     const rows = guests.map((guest) => {
-      const personIndex = Number(guest.personIndex);
+      // personIndex addresses a row and a file field, so it must be a real
+      // integer rather than whatever the client sent.
+      const personIndex = count(guest.personIndex, "personIndex", NaN) - 1;
+      if (!Number.isInteger(personIndex) || personIndex < 0 || personIndex >= guests.length) {
+        throw new ValidationError("personIndex is out of range");
+      }
       const previous = existingByIndex.get(personIndex);
       const frontFile = files.get(`front_${personIndex}`);
       const backFile = files.get(`back_${personIndex}`);
@@ -205,9 +288,9 @@ router.post("/:id/guests", requireAuth, guestUpload.any(), async (req, res) => {
       return {
         bookingId,
         personIndex,
-        name: guest.name.trim(),
-        dateOfBirth: guest.dateOfBirth || null,
-        relation: guest.relation.trim(),
+        name: text(guest.name, "guest name", 200),
+        dateOfBirth: guest.dateOfBirth ? isoDate(guest.dateOfBirth, "dateOfBirth") : null,
+        relation: text(guest.relation, "relation", 100),
         frontIdData: frontFile?.buffer ?? (keepFront ? previous?.frontIdData ?? null : null),
         frontIdMimeType: frontFile?.mimetype ?? (keepFront ? previous?.frontIdMimeType ?? null : null),
         frontIdName: frontFile?.originalname ?? (keepFront ? previous?.frontIdName ?? null : null),
@@ -223,8 +306,9 @@ router.post("/:id/guests", requireAuth, guestUpload.any(), async (req, res) => {
       await tx.insert(bookingGuestsTable).values(rows);
     });
 
-    res.status(201).json(await enrichBooking(booking, true));
+    res.status(201).json(await fetchBookingWithGuests(bookingId));
   } catch (error) {
+    if (handleValidationError(res, error)) return;
     if (error instanceof SyntaxError) {
       res.status(400).json({ error: "Bad Request", message: "Invalid guest details" });
       return;
@@ -234,25 +318,47 @@ router.post("/:id/guests", requireAuth, guestUpload.any(), async (req, res) => {
   }
 });
 
-router.post("/", requireAuth, async (req, res) => {
+router.post("/", requireAuth, requireHotelScope, async (req, res) => {
   try {
-    const { guestName, guestEmail, guestPhone, numberOfRooms, numberOfPersons, checkIn, checkOut, roomRent, addOns, receipt, notes, status, hotelId, agencyId } = req.body;
-    const effectiveHotelId = req.user?.role === "admin" ? hotelId : req.user?.hotelId;
-    if (!guestName || !checkIn || !checkOut || roomRent === undefined || addOns === undefined || !effectiveHotelId) {
-      res.status(400).json({ error: "Bad Request", message: "Required fields missing" });
+    const scope = req.hotelScope as HotelScope;
+    const body = req.body ?? {};
+
+    // An admin scoped to "all hotels" must name the hotel explicitly.
+    const requestedHotelId = parseOptionalId(body.hotelId);
+    const targetHotelId = scope.kind === "hotel" ? scope.hotelId : requestedHotelId ?? null;
+    if (!targetHotelId) {
+      res.status(400).json({ error: "Bad Request", message: "hotelId is required" });
       return;
     }
-    const rr = parseFloat(roomRent);
-    const ao = parseFloat(addOns);
-    const rc = parseFloat(receipt ?? 0);
-    const { totalCost, balance } = calcTotalAndBalance(rr, ao, rc);
+    if (scope.kind === "hotel" && requestedHotelId != null && requestedHotelId !== scope.hotelId) {
+      res.status(403).json({ error: "Forbidden", message: "Cannot create a booking for another hotel" });
+      return;
+    }
 
-    const [booking] = await db.insert(bookingsTable).values({
+    const [hotel] = await db.select().from(hotelsTable).where(eq(hotelsTable.id, targetHotelId));
+    if (!hotel) {
+      res.status(400).json({ error: "Bad Request", message: "hotelId does not exist" });
+      return;
+    }
+
+    const guestName = text(body.guestName, "guestName", 200);
+    const checkIn = isoDate(body.checkIn, "checkIn");
+    const checkOut = isoDate(body.checkOut, "checkOut");
+    if (checkOut <= checkIn) {
+      throw new ValidationError("checkOut must be after checkIn");
+    }
+    const rr = money(body.roomRent, "roomRent");
+    const ao = money(body.addOns, "addOns", 0);
+    const rc = money(body.receipt, "receipt", 0);
+    const { totalCost, balance } = calcTotalAndBalance(rr, ao, rc);
+    const agencyId = await resolveAgencyId(parseOptionalId(body.agencyId) ?? null, targetHotelId);
+
+    const [created] = await db.insert(bookingsTable).values({
       guestName,
-      guestEmail: guestEmail ?? null,
-      guestPhone: guestPhone ?? null,
-      numberOfRooms: numberOfRooms != null ? parseInt(String(numberOfRooms)) : 1,
-      numberOfPersons: numberOfPersons != null ? parseInt(String(numberOfPersons)) : 1,
+      guestEmail: optionalEmail(body.guestEmail, "guestEmail"),
+      guestPhone: optionalText(body.guestPhone, "guestPhone", 40),
+      numberOfRooms: count(body.numberOfRooms, "numberOfRooms", 1),
+      numberOfPersons: count(body.numberOfPersons, "numberOfPersons", 1),
       checkIn,
       checkOut,
       roomRent: String(rr),
@@ -260,33 +366,50 @@ router.post("/", requireAuth, async (req, res) => {
       totalCost: String(totalCost),
       receipt: String(rc),
       balance: String(balance),
-      notes: notes ?? null,
-      status: status ?? "confirmed",
-      hotelId: effectiveHotelId,
-      agencyId: agencyId ?? null,
+      notes: optionalText(body.notes, "notes", 2000),
+      status: oneOf(body.status, "status", BOOKING_STATUSES, "confirmed"),
+      hotelId: targetHotelId,
+      agencyId,
     }).returning();
 
-    res.status(201).json(await enrichBooking(booking));
+    const row = await fetchBooking(created.id);
+    res.status(201).json(row ? shapeBooking(row) : null);
   } catch (error) {
+    if (handleValidationError(res, error)) return;
     console.error(error);
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
 
-router.put("/:id", requireAuth, async (req, res) => {
+router.put("/:id", requireAuth, requireHotelScope, async (req, res) => {
   try {
-    const bookingId = parseInt(req.params.id as string);
+    const bookingId = parseIdParam(res, req.params.id);
+    if (bookingId === null) return;
+
     const [existing] = await db.select().from(bookingsTable).where(eq(bookingsTable.id, bookingId));
     if (!existing) {
       res.status(404).json({ error: "Not Found" });
       return;
     }
+    if (denyOutOfScope(res, req.hotelScope as HotelScope, existing.hotelId)) return;
 
-    const { guestName, guestEmail, guestPhone, numberOfRooms, numberOfPersons, checkIn, checkOut, roomRent, addOns, receipt, notes, status, agencyId } = req.body;
-    const rr = roomRent !== undefined ? parseFloat(roomRent) : parseFloat(existing.roomRent);
-    const ao = addOns !== undefined ? parseFloat(addOns) : parseFloat(existing.addOns);
-    const rc = receipt !== undefined ? parseFloat(receipt) : parseFloat(existing.receipt);
+    const body = req.body ?? {};
+    const { guestName, guestEmail, guestPhone, numberOfRooms, numberOfPersons, checkIn, checkOut, roomRent, addOns, receipt, notes, status, agencyId } = body;
+
+    const rr = roomRent !== undefined ? money(roomRent, "roomRent") : parseFloat(existing.roomRent);
+    const ao = addOns !== undefined ? money(addOns, "addOns") : parseFloat(existing.addOns);
+    const rc = receipt !== undefined ? money(receipt, "receipt") : parseFloat(existing.receipt);
     const { totalCost, balance } = calcTotalAndBalance(rr, ao, rc);
+
+    const nextCheckIn = checkIn !== undefined ? isoDate(checkIn, "checkIn") : existing.checkIn;
+    const nextCheckOut = checkOut !== undefined ? isoDate(checkOut, "checkOut") : existing.checkOut;
+    if (nextCheckOut <= nextCheckIn) {
+      throw new ValidationError("checkOut must be after checkIn");
+    }
+
+    const nextAgencyId = agencyId !== undefined
+      ? await resolveAgencyId(parseOptionalId(agencyId) ?? null, existing.hotelId)
+      : existing.agencyId;
 
     const changes: BookingComparison[] = [];
     const fields: { key: string; label: string }[] = [
@@ -298,35 +421,35 @@ router.put("/:id", requireAuth, async (req, res) => {
       { key: "numberOfPersons", label: "Number of Persons" },
     ];
     for (const f of fields) {
-      const newVal = req.body[f.key];
+      const newVal = body[f.key];
       const oldVal = (existing as any)[f.key];
       if (newVal !== undefined && String(newVal) !== String(oldVal ?? "")) {
         changes.push({ field: f.label, oldValue: String(oldVal ?? ""), newValue: String(newVal) });
       }
     }
-    if (roomRent !== undefined && parseFloat(roomRent) !== parseFloat(existing.roomRent)) {
-      changes.push({ field: "Room Rent", oldValue: `$${existing.roomRent}`, newValue: `$${roomRent}` });
+    if (roomRent !== undefined && rr !== parseFloat(existing.roomRent)) {
+      changes.push({ field: "Room Rent", oldValue: `₹${existing.roomRent}`, newValue: `₹${rr}` });
     }
-    if (receipt !== undefined && parseFloat(receipt) !== parseFloat(existing.receipt)) {
-      changes.push({ field: "Receipt", oldValue: `$${existing.receipt}`, newValue: `$${receipt}` });
+    if (receipt !== undefined && rc !== parseFloat(existing.receipt)) {
+      changes.push({ field: "Receipt", oldValue: `₹${existing.receipt}`, newValue: `₹${rc}` });
     }
 
     const [updated] = await db.update(bookingsTable).set({
-      guestName: guestName ?? existing.guestName,
-      guestEmail: guestEmail !== undefined ? guestEmail : existing.guestEmail,
-      guestPhone: guestPhone !== undefined ? guestPhone : existing.guestPhone,
-      numberOfRooms: numberOfRooms !== undefined ? parseInt(String(numberOfRooms)) : existing.numberOfRooms,
-      numberOfPersons: numberOfPersons !== undefined ? parseInt(String(numberOfPersons)) : existing.numberOfPersons,
-      checkIn: checkIn ?? existing.checkIn,
-      checkOut: checkOut ?? existing.checkOut,
+      guestName: guestName !== undefined ? text(guestName, "guestName", 200) : existing.guestName,
+      guestEmail: guestEmail !== undefined ? optionalEmail(guestEmail, "guestEmail") : existing.guestEmail,
+      guestPhone: guestPhone !== undefined ? optionalText(guestPhone, "guestPhone", 40) : existing.guestPhone,
+      numberOfRooms: numberOfRooms !== undefined ? count(numberOfRooms, "numberOfRooms", existing.numberOfRooms) : existing.numberOfRooms,
+      numberOfPersons: numberOfPersons !== undefined ? count(numberOfPersons, "numberOfPersons", existing.numberOfPersons) : existing.numberOfPersons,
+      checkIn: nextCheckIn,
+      checkOut: nextCheckOut,
       roomRent: String(rr),
       addOns: String(ao),
       totalCost: String(totalCost),
       receipt: String(rc),
       balance: String(balance),
-      notes: notes !== undefined ? notes : existing.notes,
-      status: status ?? existing.status,
-      agencyId: agencyId !== undefined ? agencyId : existing.agencyId,
+      notes: notes !== undefined ? optionalText(notes, "notes", 2000) : existing.notes,
+      status: status !== undefined ? oneOf(status, "status", BOOKING_STATUSES) : existing.status,
+      agencyId: nextAgencyId,
       updatedAt: new Date(),
     }).where(eq(bookingsTable.id, bookingId)).returning();
 
@@ -340,43 +463,61 @@ router.put("/:id", requireAuth, async (req, res) => {
       }
     }
 
-    res.json(await enrichBooking(updated));
+    const row = await fetchBooking(bookingId);
+    res.json(row ? shapeBooking(row) : null);
   } catch (error) {
+    if (handleValidationError(res, error)) return;
     console.error(error);
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
 
-router.patch("/:id/payment", requireAuth, async (req, res) => {
+router.patch("/:id/payment", requireAuth, requireHotelScope, async (req, res) => {
   try {
-    const bookingId = parseInt(req.params.id as string);
+    const bookingId = parseIdParam(res, req.params.id);
+    if (bookingId === null) return;
+
     const [existing] = await db.select().from(bookingsTable).where(eq(bookingsTable.id, bookingId));
     if (!existing) {
       res.status(404).json({ error: "Not Found" });
       return;
     }
-    const rc = parseFloat(req.body.receipt);
+    if (denyOutOfScope(res, req.hotelScope as HotelScope, existing.hotelId)) return;
+
+    const rc = money(req.body?.receipt, "receipt");
     const rr = parseFloat(existing.roomRent);
     const ao = parseFloat(existing.addOns);
     const { totalCost, balance } = calcTotalAndBalance(rr, ao, rc);
 
-    const [updated] = await db.update(bookingsTable).set({
+    await db.update(bookingsTable).set({
       receipt: String(rc),
       totalCost: String(totalCost),
       balance: String(balance),
       updatedAt: new Date(),
-    }).where(eq(bookingsTable.id, bookingId)).returning();
+    }).where(eq(bookingsTable.id, bookingId));
 
-    res.json(await enrichBooking(updated));
+    const row = await fetchBooking(bookingId);
+    res.json(row ? shapeBooking(row) : null);
   } catch (error) {
+    if (handleValidationError(res, error)) return;
     console.error(error);
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
 
-router.delete("/:id", requireAuth, requireOwnerOrAdmin, async (req, res) => {
+router.delete("/:id", requireAuth, requireOwnerOrAdmin, requireHotelScope, async (req, res) => {
   try {
-    await db.delete(bookingsTable).where(eq(bookingsTable.id, parseInt(req.params.id as string)));
+    const bookingId = parseIdParam(res, req.params.id);
+    if (bookingId === null) return;
+
+    const [existing] = await db.select().from(bookingsTable).where(eq(bookingsTable.id, bookingId));
+    if (!existing) {
+      res.status(404).json({ error: "Not Found" });
+      return;
+    }
+    if (denyOutOfScope(res, req.hotelScope as HotelScope, existing.hotelId)) return;
+
+    await db.delete(bookingsTable).where(eq(bookingsTable.id, bookingId));
     res.status(204).send();
   } catch (error) {
     console.error(error);

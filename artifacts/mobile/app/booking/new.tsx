@@ -25,6 +25,7 @@ import {
   validateBookingGuests,
 } from "@/components/BookingGuestsForm";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
+import { useEffectiveHotelId } from "@/components/HotelPicker";
 
 const C = Colors.light;
 
@@ -32,6 +33,10 @@ interface Agency { id: number; name: string; }
 
 export default function NewBookingScreen() {
   const { user } = useAuth();
+  // The hotel the picker currently resolves to. An admin has no hotelId of
+  // their own, so reading user.hotelId here always sent null and the create
+  // failed with "Required fields missing".
+  const effectiveHotelId = useEffectiveHotelId();
   const insets = useSafeAreaInsets();
   const qc = useQueryClient();
   const today = new Date().toISOString().split("T")[0];
@@ -98,6 +103,12 @@ export default function NewBookingScreen() {
     if (!form.roomRent) { Alert.alert("Error", "Room rent is required"); return; }
     const guestError = validateBookingGuests(guestDetails, form.guestName);
     if (guestError) { Alert.alert("Guest details", guestError); return; }
+    if (!effectiveHotelId) {
+      Alert.alert("Error", user?.role === "admin"
+        ? "Select a specific hotel before creating a booking."
+        : "Your account is not assigned to a hotel.");
+      return;
+    }
 
     createMutation.mutate({
       guestName: form.guestName.trim(),
@@ -112,7 +123,7 @@ export default function NewBookingScreen() {
       receipt,
       notes: form.notes.trim() || null,
       status: form.status,
-      hotelId: user?.hotelId,
+      hotelId: effectiveHotelId,
       agencyId: form.agencyId ? parseInt(form.agencyId) : null,
     });
   }

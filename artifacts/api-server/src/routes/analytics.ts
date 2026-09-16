@@ -2,19 +2,23 @@ import { Router } from "express";
 import { db, bookingsTable, hotelsTable, agenciesTable } from "@workspace/db";
 import { eq, and, sql } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth.js";
+import { requireHotelScope, hotelFilter, type HotelScope } from "../lib/scope.js";
 
 const router = Router();
 
-router.get("/occupancy", requireAuth, async (req, res) => {
+router.get("/occupancy", requireAuth, requireHotelScope, async (req, res) => {
   try {
-    const { hotelId: queryHotelId, month, year } = req.query;
-    const effectiveHotelId = req.user?.role === "admin"
-      ? queryHotelId ? parseInt(queryHotelId as string) : undefined
-      : req.user?.hotelId ?? undefined;
+    const { month, year } = req.query;
+    const scope = req.hotelScope as HotelScope;
+    const effectiveHotelId = scope.kind === "hotel" ? scope.hotelId : undefined;
 
     const now = new Date();
-    const m = month ? parseInt(month as string) : now.getMonth() + 1;
-    const y = year ? parseInt(year as string) : now.getFullYear();
+    const m = month ? parseInt(month as string, 10) : now.getMonth() + 1;
+    const y = year ? parseInt(year as string, 10) : now.getFullYear();
+    if (!Number.isInteger(m) || m < 1 || m > 12 || !Number.isInteger(y) || y < 1970 || y > 9999) {
+      res.status(400).json({ error: "Bad Request", message: "month must be 1-12 and year must be a valid year" });
+      return;
+    }
 
     const daysInMonth = new Date(y, m, 0).getDate();
     const firstDay = `${y}-${String(m).padStart(2, "0")}-01`;
@@ -36,7 +40,8 @@ router.get("/occupancy", requireAuth, async (req, res) => {
       sql`${bookingsTable.checkOut} > ${firstDay}`,
       sql`${bookingsTable.status} IN ('confirmed', 'checked_in')`,
     ];
-    if (effectiveHotelId) conditions.push(eq(bookingsTable.hotelId, effectiveHotelId));
+    const occupancyFilter = hotelFilter(scope, bookingsTable.hotelId);
+    if (occupancyFilter) conditions.push(occupancyFilter);
 
     const [aggregate] = await db
       .select({
@@ -75,16 +80,20 @@ router.get("/occupancy", requireAuth, async (req, res) => {
   }
 });
 
-router.get("/revenue", requireAuth, async (req, res) => {
+router.get("/revenue", requireAuth, requireHotelScope, async (req, res) => {
   try {
-    const { hotelId: queryHotelId, year } = req.query;
-    const effectiveHotelId = req.user?.role === "admin"
-      ? queryHotelId ? parseInt(queryHotelId as string) : undefined
-      : req.user?.hotelId ?? undefined;
+    const { year } = req.query;
+    const scope = req.hotelScope as HotelScope;
 
-    const y = year ? parseInt(year as string) : new Date().getFullYear();
+    const y = year ? parseInt(year as string, 10) : new Date().getFullYear();
+    if (!Number.isInteger(y) || y < 1970 || y > 9999) {
+      res.status(400).json({ error: "Bad Request", message: "year must be a valid year" });
+      return;
+    }
 
-    const hotelCondition = effectiveHotelId ? eq(bookingsTable.hotelId, effectiveHotelId) : sql`1=1`;
+    // `undefined` means "every hotel", which only an admin scope can produce.
+    // The previous `1=1` fallback made an unscoped tenant look identical.
+    const hotelCondition = hotelFilter(scope, bookingsTable.hotelId);
 
     const monthlyData = await db
       .select({
@@ -95,7 +104,7 @@ router.get("/revenue", requireAuth, async (req, res) => {
       })
       .from(bookingsTable)
       .where(and(
-        hotelCondition as any,
+        hotelCondition,
         sql`extract(year from cast(${bookingsTable.checkIn} as date)) = ${y}`
       ))
       .groupBy(
@@ -104,7 +113,10 @@ router.get("/revenue", requireAuth, async (req, res) => {
       )
       .orderBy(sql`extract(month from cast(${bookingsTable.checkIn} as date))`);
 
-    const agencies = await db.select().from(agenciesTable);
+    const agencyFilter = hotelFilter(scope, agenciesTable.hotelId);
+    const agencies = agencyFilter
+      ? await db.select().from(agenciesTable).where(agencyFilter)
+      : await db.select().from(agenciesTable);
     const agencyRevenue = await db
       .select({
         agencyId: bookingsTable.agencyId,
@@ -113,7 +125,7 @@ router.get("/revenue", requireAuth, async (req, res) => {
       })
       .from(bookingsTable)
       .where(and(
-        hotelCondition as any,
+        hotelCondition,
         sql`extract(year from cast(${bookingsTable.checkIn} as date)) = ${y}`
       ))
       .groupBy(bookingsTable.agencyId);
@@ -132,7 +144,7 @@ router.get("/revenue", requireAuth, async (req, res) => {
       .select({ total: sql<number>`sum(cast(${bookingsTable.totalCost} as decimal))` })
       .from(bookingsTable)
       .where(and(
-        hotelCondition as any,
+        hotelCondition,
         sql`extract(year from cast(${bookingsTable.checkIn} as date)) = ${y}`
       ));
 
