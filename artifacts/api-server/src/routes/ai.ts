@@ -3,7 +3,7 @@ import multer from "multer";
 import rateLimit from "express-rate-limit";
 import { PostgresRateLimitStore } from "../lib/rateLimitStore.js";
 import { db, bookingsTable, hotelsTable, agenciesTable } from "@workspace/db";
-import { eq, and, between, sql, desc } from "drizzle-orm";
+import { eq, and, between, sql, desc, count as sqlCount } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth.js";
 import { requireHotelScope, scopeAllows, hotelFilter, type HotelScope } from "../lib/scope.js";
 import { signAction, verifyAction, type PendingAction } from "../lib/actionToken.js";
@@ -189,7 +189,8 @@ function writeTargetHotelId(scope: HotelScope, requested: unknown): number | nul
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
-async function executeTool(name: string, args: any, reqUser: any, scope: HotelScope): Promise<any> {
+/** Exported so the aggregation tools can be checked against the REST endpoints they mirror. */
+export async function executeTool(name: string, args: any, reqUser: any, scope: HotelScope): Promise<any> {
   const scopeFilter = hotelFilter(scope, bookingsTable.hotelId);
   const scopedHotelId = scope.kind === "hotel" ? scope.hotelId : undefined;
 
@@ -315,90 +316,167 @@ async function executeTool(name: string, args: any, reqUser: any, scope: HotelSc
       sql`${bookingsTable.status} IN ('confirmed','checked_in')`,
     ];
     if (scopeFilter) conditions.push(scopeFilter);
-    const rows = await db.select().from(bookingsTable).where(and(...conditions));
-    const occupiedRooms = rows.reduce((s, b) => s + (b.numberOfRooms ?? 1), 0);
-    let totalRooms = 0;
-    if (scopedHotelId) {
-      const [h] = await db.select().from(hotelsTable).where(eq(hotelsTable.id, scopedHotelId));
-      totalRooms = h?.totalRooms ?? 0;
-    } else {
-      const hs = await db.select().from(hotelsTable);
-      totalRooms = hs.reduce((s, h) => s + h.totalRooms, 0);
-    }
+    const where = and(...conditions);
+
+    // The occupancy figure is a sum, so it is summed in the database. Only the
+    // accompanying list is fetched, and only a page of it.
+    const [totals] = await db
+      .select({ occupiedRooms: sql<number>`coalesce(sum(${bookingsTable.numberOfRooms}), 0)`, stays: sqlCount() })
+      .from(bookingsTable)
+      .where(where);
+
+    const stays = Number(totals?.stays ?? 0);
+    const rows = await db
+      .select({
+        id: bookingsTable.id,
+        guestName: bookingsTable.guestName,
+        numberOfRooms: bookingsTable.numberOfRooms,
+        numberOfPersons: bookingsTable.numberOfPersons,
+        checkIn: bookingsTable.checkIn,
+        checkOut: bookingsTable.checkOut,
+      })
+      .from(bookingsTable)
+      .where(where)
+      .orderBy(bookingsTable.id)
+      .limit(MAX_TOOL_ROWS);
+
+    const [roomsRow] = scopedHotelId
+      ? await db.select({ total: sql<number>`coalesce(${hotelsTable.totalRooms}, 0)` })
+          .from(hotelsTable).where(eq(hotelsTable.id, scopedHotelId))
+      : await db.select({ total: sql<number>`coalesce(sum(${hotelsTable.totalRooms}), 0)` }).from(hotelsTable);
+
+    const occupiedRooms = Number(totals?.occupiedRooms ?? 0);
+    const totalRooms = Number(roomsRow?.total ?? 0);
+
     return {
       date,
       occupiedRooms,
       totalRooms,
       vacantRooms: Math.max(0, totalRooms - occupiedRooms),
       occupancyPercentage: totalRooms > 0 ? Math.round((occupiedRooms / totalRooms) * 100) : 0,
-      bookings: rows.map((b) => ({ id: b.id, guestName: b.guestName, numberOfRooms: b.numberOfRooms, numberOfPersons: b.numberOfPersons, checkIn: b.checkIn, checkOut: b.checkOut })),
+      stays,
+      // Truncated rather than silently partial: the model is told so it does
+      // not report a page as the whole picture.
+      ...(stays > rows.length ? { truncated: true, showing: rows.length } : {}),
+      bookings: rows,
     };
   }
 
   if (name === "dashboard_stats") {
-    const today = new Date().toISOString().split("T")[0];
-    const allBookings = scopeFilter
-      ? await db.select().from(bookingsTable).where(scopeFilter)
-      : await db.select().from(bookingsTable);
-    const checkins = allBookings.filter((b) => b.checkIn === today).length;
-    const checkouts = allBookings.filter((b) => b.checkOut === today).length;
-    const occupied = allBookings.filter((b) => b.checkIn <= today! && b.checkOut > today! && (b.status === "confirmed" || b.status === "checked_in")).reduce((s, b) => s + (b.numberOfRooms ?? 1), 0);
-    const month = new Date().getMonth() + 1, year = new Date().getFullYear();
-    const monthStart = `${year}-${String(month).padStart(2, "0")}-01`;
-    const monthRevenue = allBookings.filter((b) => b.checkIn >= monthStart).reduce((s, b) => s + parseFloat(b.totalCost), 0);
-    let totalRooms = 0;
-    if (scopedHotelId) {
-      const [h] = await db.select().from(hotelsTable).where(eq(hotelsTable.id, scopedHotelId));
-      totalRooms = h?.totalRooms ?? 0;
-    } else {
-      const hs = await db.select().from(hotelsTable);
-      totalRooms = hs.reduce((s, h) => s + h.totalRooms, 0);
-    }
+    const today = new Date().toISOString().split("T")[0]!;
+    const now = new Date();
+    const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+    /**
+     * The month needs both ends.
+     *
+     * This previously filtered on checkIn >= monthStart with no upper bound, so
+     * "this month's revenue" silently included every future booking as well.
+     * The assistant and the dashboard answered the same question differently,
+     * and the assistant was the one that was wrong.
+     */
+    const monthEnd = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(
+      new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate(),
+    ).padStart(2, "0")}`;
+
+    /**
+     * Aggregated in the database rather than in Node.
+     *
+     * This previously selected every booking the caller could see and reduced
+     * over the array — for an admin with no hotel selected, the whole table,
+     * held in memory against a pool of 20, to produce five numbers. The REST
+     * dashboard has always done this in SQL; the assistant's copy had not.
+     */
+    const [row] = await db
+      .select({
+        totalBookings: sqlCount(),
+        todayCheckins: sql<number>`count(*) FILTER (WHERE ${bookingsTable.checkIn} = ${today})`,
+        todayCheckouts: sql<number>`count(*) FILTER (WHERE ${bookingsTable.checkOut} = ${today})`,
+        occupiedRooms: sql<number>`coalesce(sum(${bookingsTable.numberOfRooms}) FILTER (
+          WHERE ${bookingsTable.checkIn} <= ${today}
+            AND ${bookingsTable.checkOut} > ${today}
+            AND ${bookingsTable.status} IN ('confirmed','checked_in')
+        ), 0)`,
+        monthlyRevenue: sql<number>`coalesce(sum(cast(${bookingsTable.totalCost} as decimal)) FILTER (
+          WHERE ${bookingsTable.checkIn} >= ${monthStart} AND ${bookingsTable.checkIn} <= ${monthEnd}
+        ), 0)`,
+      })
+      .from(bookingsTable)
+      .where(scopeFilter);
+
+    const [roomsRow] = scopedHotelId
+      ? await db.select({ total: sql<number>`coalesce(${hotelsTable.totalRooms}, 0)` })
+          .from(hotelsTable).where(eq(hotelsTable.id, scopedHotelId))
+      : await db.select({ total: sql<number>`coalesce(sum(${hotelsTable.totalRooms}), 0)` }).from(hotelsTable);
+
+    const occupied = Number(row?.occupiedRooms ?? 0);
+    const totalRooms = Number(roomsRow?.total ?? 0);
+
     return {
       today,
-      todayCheckins: checkins,
-      todayCheckouts: checkouts,
+      todayCheckins: Number(row?.todayCheckins ?? 0),
+      todayCheckouts: Number(row?.todayCheckouts ?? 0),
       occupiedRooms: occupied,
       totalRooms,
       occupancyPercentage: totalRooms > 0 ? Math.round((occupied / totalRooms) * 100) : 0,
-      monthlyRevenue: monthRevenue,
-      totalBookings: allBookings.length,
+      monthlyRevenue: Number(row?.monthlyRevenue ?? 0),
+      totalBookings: Number(row?.totalBookings ?? 0),
     };
   }
 
   if (name === "revenue_summary") {
     const year = Number.parseInt(String(args.year ?? new Date().getFullYear()), 10);
     if (!Number.isInteger(year) || year < 1970 || year > 9999) return { error: "year must be a valid year" };
-    const conditions: any[] = [
-      sql`EXTRACT(YEAR FROM ${bookingsTable.checkIn}) = ${year}`,
-    ];
-    if (scopeFilter) conditions.push(scopeFilter);
-    const rows = await db.select().from(bookingsTable).where(and(...conditions));
+
+    const yearFilter = sql`EXTRACT(YEAR FROM ${bookingsTable.checkIn}) = ${year}`;
+    const where = scopeFilter ? and(yearFilter, scopeFilter) : yearFilter;
+
+    // Grouped in SQL. A year of bookings was previously loaded in full and
+    // bucketed twice in JavaScript — once by month, once by agency.
+    const monthlyRows = await db
+      .select({
+        month: sql<number>`EXTRACT(MONTH FROM ${bookingsTable.checkIn})`,
+        revenue: sql<number>`coalesce(sum(cast(${bookingsTable.totalCost} as decimal)), 0)`,
+        bookings: sqlCount(),
+      })
+      .from(bookingsTable)
+      .where(where)
+      .groupBy(sql`EXTRACT(MONTH FROM ${bookingsTable.checkIn})`);
+
     const monthly: Record<number, { revenue: number; bookings: number }> = {};
     for (let m = 1; m <= 12; m++) monthly[m] = { revenue: 0, bookings: 0 };
-    for (const b of rows) {
-      const m = new Date(b.checkIn).getMonth() + 1;
-      monthly[m]!.revenue += parseFloat(b.totalCost);
-      monthly[m]!.bookings += 1;
+    for (const r of monthlyRows) {
+      monthly[Number(r.month)] = { revenue: Number(r.revenue ?? 0), bookings: Number(r.bookings ?? 0) };
     }
+
+    const agencyRows = await db
+      .select({
+        agencyId: bookingsTable.agencyId,
+        revenue: sql<number>`coalesce(sum(cast(${bookingsTable.totalCost} as decimal)), 0)`,
+        bookings: sqlCount(),
+      })
+      .from(bookingsTable)
+      .where(where)
+      .groupBy(bookingsTable.agencyId);
+
     const agencyFilter = hotelFilter(scope, agenciesTable.hotelId);
     const agencies = agencyFilter
       ? await db.select().from(agenciesTable).where(agencyFilter)
       : await db.select().from(agenciesTable);
     const agencyMap = new Map(agencies.map((a) => [a.id, a.name]));
+
     const byAgency: Record<string, { revenue: number; bookings: number }> = {};
-    for (const b of rows) {
-      const key = b.agencyId ? agencyMap.get(b.agencyId) ?? `Agency ${b.agencyId}` : "Direct";
-      if (!byAgency[key]) byAgency[key] = { revenue: 0, bookings: 0 };
-      byAgency[key].revenue += parseFloat(b.totalCost);
-      byAgency[key].bookings += 1;
+    for (const r of agencyRows) {
+      const key = r.agencyId ? agencyMap.get(r.agencyId) ?? `Agency ${r.agencyId}` : "Direct";
+      const existing = byAgency[key] ?? { revenue: 0, bookings: 0 };
+      byAgency[key] = {
+        revenue: existing.revenue + Number(r.revenue ?? 0),
+        bookings: existing.bookings + Number(r.bookings ?? 0),
+      };
     }
-    return {
-      year,
-      totalRevenue: rows.reduce((s, b) => s + parseFloat(b.totalCost), 0),
-      monthlyRevenue: monthly,
-      revenueByAgency: byAgency,
-    };
+
+    const totalRevenue = monthlyRows.reduce((sum, r) => sum + Number(r.revenue ?? 0), 0);
+
+    return { year, totalRevenue, monthlyRevenue: monthly, revenueByAgency: byAgency };
   }
 
   if (name === "list_agencies") {
