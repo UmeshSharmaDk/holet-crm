@@ -2,6 +2,7 @@ import { Router } from "express";
 import { db, hotelsTable, bookingsTable, agenciesTable, bookingGuestsTable } from "@workspace/db";
 import { eq, and, count as sqlCount, sql } from "drizzle-orm";
 import { requireAuth, requireAdmin } from "../middlewares/auth.js";
+import { recordAudit } from "../lib/audit.js";
 import { parseIdParam, text, count, handleValidationError } from "../lib/validate.js";
 
 const router = Router();
@@ -162,6 +163,13 @@ router.delete("/:id", requireAuth, requireAdmin, async (req, res) => {
     }
 
     await db.delete(hotelsTable).where(eq(hotelsTable.id, hotelId));
+    await recordAudit(req, {
+      action: "hotel.delete",
+      targetType: "hotel",
+      targetId: hotelId,
+      hotelId,
+      detail: { name: existing.name, ...impact },
+    });
     console.log(
       `[hotels] user ${req.user!.userId} deleted hotel ${hotelId} ("${existing.name}") ` +
       `removing ${impact.bookings} booking(s), ${impact.agencies} agency record(s), ${impact.guestIdScans} ID scan(s)`,
