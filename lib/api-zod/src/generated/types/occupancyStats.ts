@@ -5,10 +5,16 @@
  * Hotel CRM API
  * OpenAPI spec version: 0.1.0
  */
-import type { OccupancyStatsDailyOccupancyItem } from "./occupancyStatsDailyOccupancyItem";
 
 export interface OccupancyStats {
-  dailyOccupancy: OccupancyStatsDailyOccupancyItem[];
-  averageOccupancy: number;
+  month: number;
+  year: number;
+  daysInMonth: number;
   totalRooms: number;
+  roomNights: number;
+  averageOccupiedRooms: number;
+  occupancyPercentage: number;
+  bookingsCount: number;
+  totalRoomsBooked: number;
+  totalPersons: number;
 }

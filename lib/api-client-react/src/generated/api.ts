@@ -24,6 +24,8 @@ import type {
   CreateHotelRequest,
   CreateUserRequest,
   DashboardStats,
+  DeleteHotelConflict,
+  DeleteHotelRequest,
   ErrorResponse,
   GetDashboardForecastParams,
   GetDashboardStatsParams,
@@ -610,6 +612,7 @@ export const useUpdateHotel = <
 };
 
 /**
+ * Bookings and agencies cascade from a hotel, and guest rosters cascade from bookings, so this removes the hotel's entire history including any stored identity documents. A hotel holding records is refused with 409 unless the request confirms the hotel's exact name; the refusal reports what would be destroyed. An empty hotel deletes without confirmation.
  * @summary Delete a hotel
  */
 export const getDeleteHotelUrl = (id: number) => {
@@ -618,29 +621,32 @@ export const getDeleteHotelUrl = (id: number) => {
 
 export const deleteHotel = async (
   id: number,
+  deleteHotelRequest?: DeleteHotelRequest,
   options?: RequestInit,
 ): Promise<void> => {
   return customFetch<void>(getDeleteHotelUrl(id), {
     ...options,
     method: "DELETE",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(deleteHotelRequest),
   });
 };
 
 export const getDeleteHotelMutationOptions = <
-  TError = ErrorType<unknown>,
+  TError = ErrorType<DeleteHotelConflict>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof deleteHotel>>,
     TError,
-    { id: number },
+    { id: number; data: BodyType<DeleteHotelRequest> },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationOptions<
   Awaited<ReturnType<typeof deleteHotel>>,
   TError,
-  { id: number },
+  { id: number; data: BodyType<DeleteHotelRequest> },
   TContext
 > => {
   const mutationKey = ["deleteHotel"];
@@ -654,11 +660,11 @@ export const getDeleteHotelMutationOptions = <
 
   const mutationFn: MutationFunction<
     Awaited<ReturnType<typeof deleteHotel>>,
-    { id: number }
+    { id: number; data: BodyType<DeleteHotelRequest> }
   > = (props) => {
-    const { id } = props ?? {};
+    const { id, data } = props ?? {};
 
-    return deleteHotel(id, requestOptions);
+    return deleteHotel(id, data, requestOptions);
   };
 
   return { mutationFn, ...mutationOptions };
@@ -667,27 +673,27 @@ export const getDeleteHotelMutationOptions = <
 export type DeleteHotelMutationResult = NonNullable<
   Awaited<ReturnType<typeof deleteHotel>>
 >;
-
-export type DeleteHotelMutationError = ErrorType<unknown>;
+export type DeleteHotelMutationBody = BodyType<DeleteHotelRequest>;
+export type DeleteHotelMutationError = ErrorType<DeleteHotelConflict>;
 
 /**
  * @summary Delete a hotel
  */
 export const useDeleteHotel = <
-  TError = ErrorType<unknown>,
+  TError = ErrorType<DeleteHotelConflict>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof deleteHotel>>,
     TError,
-    { id: number },
+    { id: number; data: BodyType<DeleteHotelRequest> },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationResult<
   Awaited<ReturnType<typeof deleteHotel>>,
   TError,
-  { id: number },
+  { id: number; data: BodyType<DeleteHotelRequest> },
   TContext
 > => {
   return useMutation(getDeleteHotelMutationOptions(options));
@@ -843,6 +849,83 @@ export const useCreateUser = <
 > => {
   return useMutation(getCreateUserMutationOptions(options));
 };
+
+/**
+ * @summary Get a user by ID (admin only)
+ */
+export const getGetUserUrl = (id: number) => {
+  return `/api/users/${id}`;
+};
+
+export const getUser = async (
+  id: number,
+  options?: RequestInit,
+): Promise<User> => {
+  return customFetch<User>(getGetUserUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetUserQueryKey = (id: number) => {
+  return [`/api/users/${id}`] as const;
+};
+
+export const getGetUserQueryOptions = <
+  TData = Awaited<ReturnType<typeof getUser>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getUser>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetUserQueryKey(id);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getUser>>> = ({
+    signal,
+  }) => getUser(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<Awaited<ReturnType<typeof getUser>>, TError, TData> & {
+    queryKey: QueryKey;
+  };
+};
+
+export type GetUserQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getUser>>
+>;
+export type GetUserQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Get a user by ID (admin only)
+ */
+
+export function useGetUser<
+  TData = Awaited<ReturnType<typeof getUser>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getUser>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetUserQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary Update a user
@@ -1175,6 +1258,91 @@ export const useCreateAgency = <
 > => {
   return useMutation(getCreateAgencyMutationOptions(options));
 };
+
+/**
+ * @summary Get an agency by ID
+ */
+export const getGetAgencyUrl = (id: number) => {
+  return `/api/agencies/${id}`;
+};
+
+export const getAgency = async (
+  id: number,
+  options?: RequestInit,
+): Promise<Agency> => {
+  return customFetch<Agency>(getGetAgencyUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetAgencyQueryKey = (id: number) => {
+  return [`/api/agencies/${id}`] as const;
+};
+
+export const getGetAgencyQueryOptions = <
+  TData = Awaited<ReturnType<typeof getAgency>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getAgency>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetAgencyQueryKey(id);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getAgency>>> = ({
+    signal,
+  }) => getAgency(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<Awaited<ReturnType<typeof getAgency>>, TError, TData> & {
+    queryKey: QueryKey;
+  };
+};
+
+export type GetAgencyQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getAgency>>
+>;
+export type GetAgencyQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Get an agency by ID
+ */
+
+export function useGetAgency<
+  TData = Awaited<ReturnType<typeof getAgency>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getAgency>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetAgencyQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary Update an agency
@@ -1960,6 +2128,115 @@ export const useSaveBookingGuests = <
 > => {
   return useMutation(getSaveBookingGuestsMutationOptions(options));
 };
+
+/**
+ * Returns the raw image. The content type is taken from a fixed image allowlist rather than the value supplied at upload, and the response carries X-Content-Type-Options nosniff and Cache-Control private, no-store. Scoped to the booking's hotel; a booking belonging to another hotel answers 404 rather than 403 so ids cannot be enumerated.
+ * @summary Retrieve a stored guest identity document
+ */
+export const getGetGuestIdScanUrl = (
+  bookingId: number,
+  guestId: number,
+  side: "front" | "back",
+) => {
+  return `/api/bookings/${bookingId}/guests/${guestId}/id/${side}`;
+};
+
+export const getGuestIdScan = async (
+  bookingId: number,
+  guestId: number,
+  side: "front" | "back",
+  options?: RequestInit,
+): Promise<Blob> => {
+  return customFetch<Blob>(getGetGuestIdScanUrl(bookingId, guestId, side), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetGuestIdScanQueryKey = (
+  bookingId: number,
+  guestId: number,
+  side: "front" | "back",
+) => {
+  return [`/api/bookings/${bookingId}/guests/${guestId}/id/${side}`] as const;
+};
+
+export const getGetGuestIdScanQueryOptions = <
+  TData = Awaited<ReturnType<typeof getGuestIdScan>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  bookingId: number,
+  guestId: number,
+  side: "front" | "back",
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getGuestIdScan>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getGetGuestIdScanQueryKey(bookingId, guestId, side);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getGuestIdScan>>> = ({
+    signal,
+  }) => getGuestIdScan(bookingId, guestId, side, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!(bookingId && guestId && side),
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getGuestIdScan>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetGuestIdScanQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getGuestIdScan>>
+>;
+export type GetGuestIdScanQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Retrieve a stored guest identity document
+ */
+
+export function useGetGuestIdScan<
+  TData = Awaited<ReturnType<typeof getGuestIdScan>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  bookingId: number,
+  guestId: number,
+  side: "front" | "back",
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getGuestIdScan>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetGuestIdScanQueryOptions(
+    bookingId,
+    guestId,
+    side,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary Get dashboard stats

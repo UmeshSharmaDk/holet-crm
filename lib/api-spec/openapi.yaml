@@ -169,6 +169,12 @@ paths:
       operationId: deleteHotel
       tags: [hotels]
       summary: Delete a hotel
+      description: >-
+        Bookings and agencies cascade from a hotel, and guest rosters cascade
+        from bookings, so this removes the hotel's entire history including any
+        stored identity documents. A hotel holding records is refused with 409
+        unless the request confirms the hotel's exact name; the refusal reports
+        what would be destroyed. An empty hotel deletes without confirmation.
       security:
         - bearerAuth: []
       parameters:
@@ -177,9 +183,21 @@ paths:
           required: true
           schema:
             type: integer
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeleteHotelRequest"
       responses:
         "204":
           description: Hotel deleted
+        "409":
+          description: Confirmation required before destroying the hotel's records
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeleteHotelConflict"
 
   /users:
     get:
@@ -218,6 +236,37 @@ paths:
                 $ref: "#/components/schemas/User"
 
   /users/{id}:
+    get:
+      operationId: getUser
+      tags: [users]
+      summary: Get a user by ID (admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: User
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "403":
+          description: Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
     put:
       operationId: updateUser
       tags: [users]
@@ -296,6 +345,31 @@ paths:
                 $ref: "#/components/schemas/Agency"
 
   /agencies/{id}:
+    get:
+      operationId: getAgency
+      tags: [agencies]
+      summary: Get an agency by ID
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Agency
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Agency"
+        "404":
+          description: Not found, or belongs to another hotel
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
     put:
       operationId: updateAgency
       tags: [agencies]
@@ -512,6 +586,57 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Booking"
+
+  /bookings/{bookingId}/guests/{guestId}/id/{side}:
+    get:
+      operationId: getGuestIdScan
+      tags: [bookings]
+      summary: Retrieve a stored guest identity document
+      description: >-
+        Returns the raw image. The content type is taken from a fixed image
+        allowlist rather than the value supplied at upload, and the response
+        carries X-Content-Type-Options nosniff and Cache-Control private,
+        no-store. Scoped to the booking's hotel; a booking belonging to another
+        hotel answers 404 rather than 403 so ids cannot be enumerated.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: bookingId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: guestId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: side
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [front, back]
+      responses:
+        "200":
+          description: The identity document image
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+        "400":
+          description: Invalid identifier or side
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: No such scan, or the booking belongs to another hotel
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /dashboard/stats:
     get:
@@ -796,6 +921,34 @@ components:
         - name
         - totalRooms
 
+    DeleteHotelRequest:
+      type: object
+      properties:
+        confirm:
+          type: string
+          description: The hotel's exact name, required when it holds records.
+
+    DeleteHotelConflict:
+      type: object
+      required: [error, message, confirmationRequired, impact]
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        confirmationRequired:
+          type: boolean
+        impact:
+          type: object
+          required: [bookings, agencies, guestIdScans]
+          properties:
+            bookings:
+              type: integer
+            agencies:
+              type: integer
+            guestIdScans:
+              type: integer
+
     Agency:
       type: object
       properties:
@@ -850,12 +1003,10 @@ components:
         guestPhone:
           type: string
           nullable: true
-        roomNumber:
-          type: string
-          nullable: true
-        roomType:
-          type: string
-          nullable: true
+        numberOfRooms:
+          type: integer
+        numberOfPersons:
+          type: integer
         checkIn:
           type: string
           format: date
@@ -961,12 +1112,10 @@ components:
         guestPhone:
           type: string
           nullable: true
-        roomNumber:
-          type: string
-          nullable: true
-        roomType:
-          type: string
-          nullable: true
+        numberOfRooms:
+          type: integer
+        numberOfPersons:
+          type: integer
         checkIn:
           type: string
           format: date
@@ -1011,12 +1160,10 @@ components:
         guestPhone:
           type: string
           nullable: true
-        roomNumber:
-          type: string
-          nullable: true
-        roomType:
-          type: string
-          nullable: true
+        numberOfRooms:
+          type: integer
+        numberOfPersons:
+          type: integer
         checkIn:
           type: string
           format: date
@@ -1076,32 +1223,37 @@ components:
     OccupancyStats:
       type: object
       properties:
-        dailyOccupancy:
-          type: array
-          items:
-            type: object
-            properties:
-              date:
-                type: string
-              occupiedRooms:
-                type: integer
-              totalRooms:
-                type: integer
-              percentage:
-                type: number
-            required:
-              - date
-              - occupiedRooms
-              - totalRooms
-              - percentage
-        averageOccupancy:
-          type: number
+        month:
+          type: integer
+        year:
+          type: integer
+        daysInMonth:
+          type: integer
         totalRooms:
           type: integer
+        roomNights:
+          type: number
+        averageOccupiedRooms:
+          type: number
+        occupancyPercentage:
+          type: integer
+        bookingsCount:
+          type: integer
+        totalRoomsBooked:
+          type: integer
+        totalPersons:
+          type: integer
       required:
-        - dailyOccupancy
-        - averageOccupancy
+        - month
+        - year
+        - daysInMonth
         - totalRooms
+        - roomNights
+        - averageOccupiedRooms
+        - occupancyPercentage
+        - bookingsCount
+        - totalRoomsBooked
+        - totalPersons
 
     RevenueStats:
       type: object
