@@ -62,4 +62,12 @@ jobs:
         run: pnpm --filter @workspace/api-server run test
 
       - name: Build
+        # NODE_ENV=test (set above for the DB push and test run) must not reach this
+        # step: babel-preset-expo's expo-router plugin skips inlining
+        # EXPO_ROUTER_APP_ROOT under NODE_ENV=test (it assumes Jest owns routing then),
+        # which leaves `require.context(process.env.EXPO_ROUTER_APP_ROOT, ...)`
+        # un-inlined and fails Metro's static analysis of require.context's first
+        # argument — the "HTTP 500" this job used to report with no other detail.
         run: pnpm run build
+        env:
+          NODE_ENV: production
