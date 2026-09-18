@@ -43,6 +43,16 @@ paths:
       operationId: login
       tags: [auth]
       summary: Login with email and password
+      parameters:
+        - in: header
+          name: X-Auth-Transport
+          required: false
+          schema:
+            type: string
+            enum: [cookie]
+          description: >-
+            Send `cookie` to receive the session as httpOnly `holet_session`
+            and readable `holet_csrf` cookies instead of a token in the body.
       requestBody:
         required: true
         content:
@@ -70,6 +80,7 @@ paths:
       summary: Get current user info
       security:
         - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Current user
@@ -84,6 +95,26 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      summary: Clear the session cookies
+      description: >-
+        Required for cookie sessions, since only the server can expire an
+        httpOnly cookie. Succeeds without a valid token so an expired or
+        revoked session can still be cleared, but a request carrying a session
+        cookie must present a matching X-CSRF-Token header.
+      responses:
+        "204":
+          description: Session cleared
+        "403":
+          description: Missing or invalid CSRF token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /hotels:
     get:
       operationId: listHotels
@@ -91,6 +122,7 @@ paths:
       summary: List all hotels
       security:
         - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: List of hotels
@@ -106,6 +138,7 @@ paths:
       summary: Create a hotel
       security:
         - bearerAuth: []
+        - cookieAuth: []
       requestBody:
         required: true
         content:
@@ -127,6 +160,7 @@ paths:
       summary: Get a hotel by ID
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: id
           in: path
@@ -146,6 +180,7 @@ paths:
       summary: Update a hotel
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: id
           in: path
@@ -177,6 +212,7 @@ paths:
         what would be destroyed. An empty hotel deletes without confirmation.
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: id
           in: path
@@ -206,6 +242,7 @@ paths:
       summary: List all users
       security:
         - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: List of users
@@ -221,6 +258,7 @@ paths:
       summary: Create a user
       security:
         - bearerAuth: []
+        - cookieAuth: []
       requestBody:
         required: true
         content:
@@ -242,6 +280,7 @@ paths:
       summary: Get a user by ID (admin only)
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: id
           in: path
@@ -273,6 +312,7 @@ paths:
       summary: Update a user
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: id
           in: path
@@ -298,6 +338,7 @@ paths:
       summary: Delete a user
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: id
           in: path
@@ -315,6 +356,7 @@ paths:
       summary: List all agencies
       security:
         - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: List of agencies
@@ -330,6 +372,7 @@ paths:
       summary: Create an agency
       security:
         - bearerAuth: []
+        - cookieAuth: []
       requestBody:
         required: true
         content:
@@ -351,6 +394,7 @@ paths:
       summary: Get an agency by ID
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: id
           in: path
@@ -376,6 +420,7 @@ paths:
       summary: Update an agency
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: id
           in: path
@@ -401,6 +446,7 @@ paths:
       summary: Delete an agency
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: id
           in: path
@@ -418,6 +464,7 @@ paths:
       summary: List bookings with optional filters
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: month
           in: query
@@ -451,6 +498,7 @@ paths:
       summary: Create a booking
       security:
         - bearerAuth: []
+        - cookieAuth: []
       requestBody:
         required: true
         content:
@@ -472,6 +520,7 @@ paths:
       summary: Get a booking by ID
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: id
           in: path
@@ -491,6 +540,7 @@ paths:
       summary: Update a booking
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: id
           in: path
@@ -516,6 +566,7 @@ paths:
       summary: Delete a booking (Owner only)
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: id
           in: path
@@ -533,6 +584,7 @@ paths:
       summary: Update receipt/payment for a booking
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: id
           in: path
@@ -560,6 +612,7 @@ paths:
       summary: Save guest profiles and identity documents for a booking
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: id
           in: path
@@ -600,6 +653,7 @@ paths:
         hotel answers 404 rather than 403 so ids cannot be enumerated.
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: bookingId
           in: path
@@ -645,6 +699,7 @@ paths:
       summary: Get dashboard stats
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: hotelId
           in: query
@@ -665,6 +720,7 @@ paths:
       summary: Get today's check-ins
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: hotelId
           in: query
@@ -687,6 +743,7 @@ paths:
       summary: Get today's check-outs
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: hotelId
           in: query
@@ -709,6 +766,7 @@ paths:
       summary: Get upcoming bookings for the next seven days
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: hotelId
           in: query
@@ -731,6 +789,7 @@ paths:
       summary: Get occupancy analytics
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: hotelId
           in: query
@@ -759,6 +818,7 @@ paths:
       summary: Get revenue analytics
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: hotelId
           in: query
@@ -782,6 +842,13 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+    # Used by the web client, which must not be able to read its own token.
+    # Unsafe methods additionally require the X-CSRF-Token header to match the
+    # holet_csrf cookie, since the browser attaches this one automatically.
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: holet_session
 
   schemas:
     HealthStatus:
@@ -819,10 +886,13 @@ components:
       properties:
         token:
           type: string
+          description: >-
+            Bearer token for native clients. Omitted when the request carried
+            `X-Auth-Transport: cookie`, in which case the session is returned
+            as an httpOnly cookie and never reaches the caller's JavaScript.
         user:
           $ref: "#/components/schemas/User"
       required:
-        - token
         - user
 
     User:

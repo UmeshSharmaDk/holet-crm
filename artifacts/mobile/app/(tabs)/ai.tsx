@@ -15,10 +15,10 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Colors from "@/constants/colors";
 import { useAuth } from "@/context/AuthContext";
-import { getAuthToken } from "@/lib/secureStorage";
+import { BASE_URL, authFetch } from "@/lib/api";
 
 const C = Colors.light;
-const BASE_URL = process.env.EXPO_PUBLIC_DOMAIN ? `https://${process.env.EXPO_PUBLIC_DOMAIN}` : "";
+
 
 interface ChatMsg {
   role: "user" | "assistant";
@@ -69,11 +69,6 @@ export default function AIScreen() {
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50);
   }, [messages, loading]);
 
-  async function authHeaders(): Promise<Record<string, string>> {
-    const token = await getAuthToken();
-    return token ? { Authorization: `Bearer ${token}` } : {};
-  }
-
   async function send(text: string) {
     const trimmed = text.trim();
     if (!trimmed || loading) return;
@@ -84,10 +79,9 @@ export default function AIScreen() {
     setPending(null);
     setLoading(true);
     try {
-      const headers = await authHeaders();
-      const res = await fetch(`${BASE_URL}/api/ai/chat`, {
+      const res = await authFetch(`${BASE_URL}/api/ai/chat`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...headers },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           messages: next.map((m) => ({ role: m.role, content: m.content })),
         }),
@@ -109,10 +103,9 @@ export default function AIScreen() {
     setPending(null);
     setLoading(true);
     try {
-      const headers = await authHeaders();
-      const res = await fetch(`${BASE_URL}/api/ai/chat`, {
+      const res = await authFetch(`${BASE_URL}/api/ai/chat`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...headers },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ confirmToken: action.token }),
       });
       const data = await res.json();
@@ -178,8 +171,7 @@ export default function AIScreen() {
         const ext = uri.split(".").pop() ?? "m4a";
         formData.append("audio", { uri, name: `audio.${ext}`, type: `audio/${ext === "m4a" ? "mp4" : ext}` } as any);
       }
-      const headers = await authHeaders();
-      const res = await fetch(`${BASE_URL}/api/ai/stt`, { method: "POST", headers, body: formData });
+      const res = await authFetch(`${BASE_URL}/api/ai/stt`, { method: "POST", body: formData });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.message ?? "STT failed");
       if (data.text?.trim()) {
@@ -209,10 +201,9 @@ export default function AIScreen() {
         soundRef.current = null;
       }
       setSpeakingId(msg.id);
-      const headers = await authHeaders();
-      const res = await fetch(`${BASE_URL}/api/ai/tts`, {
+      const res = await authFetch(`${BASE_URL}/api/ai/tts`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...headers },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: msg.content }),
       });
       if (!res.ok) throw new Error("TTS failed");

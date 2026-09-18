@@ -2,6 +2,17 @@ import { Request, Response, NextFunction } from "express";
 import { db, usersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { verifyToken, JWTPayload } from "../lib/jwt.js";
+import {
+  CSRF_COOKIE,
+  CSRF_HEADER,
+  SESSION_COOKIE,
+  constantTimeEquals,
+  csrfTokenBelongsTo,
+  readCookie,
+} from "../lib/cookies.js";
+
+/** Methods a browser will issue cross-origin without a preflight. */
+const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
 declare global {
   namespace Express {
@@ -20,21 +31,48 @@ declare global {
  * hotel, or deleting them takes effect immediately instead of lingering until
  * their token expires. A tokenVersion mismatch (bumped on password change)
  * rejects tokens issued before the change.
+ *
+ * The token arrives either in an Authorization header (native clients, which
+ * hold it in the Keychain/Keystore) or in an httpOnly cookie (the web client,
+ * which must not be able to read it at all). A header is never sent by the
+ * browser on its own, so it needs no CSRF protection; a cookie is, so a
+ * cookie-authenticated write has to prove the caller could read the CSRF
+ * cookie as well.
  */
 export async function requireAuth(req: Request, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization;
-  if (!authHeader?.startsWith("Bearer ")) {
+  // An explicit header wins: a native client presenting a Bearer token must not
+  // be silently authenticated as whoever a stray cookie belongs to.
+  const bearerToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+  const cookieToken = bearerToken ? null : readCookie(req, SESSION_COOKIE);
+  const token = bearerToken ?? cookieToken;
+
+  if (!token) {
     res.status(401).json({ error: "Unauthorized", message: "No token provided" });
     return;
   }
 
-  const token = authHeader.slice(7);
   let payload: JWTPayload;
   try {
     payload = verifyToken(token);
   } catch {
     res.status(401).json({ error: "Unauthorized", message: "Invalid token" });
     return;
+  }
+
+  // Checked before the user lookup so a forged cross-site write costs no query.
+  if (cookieToken && !SAFE_METHODS.has(req.method)) {
+    const header = req.headers[CSRF_HEADER];
+    const cookie = readCookie(req, CSRF_COOKIE);
+    const present = typeof header === "string" && !!header && !!cookie;
+    if (
+      !present ||
+      !constantTimeEquals(header as string, cookie as string) ||
+      !csrfTokenBelongsTo(cookie as string, payload.userId)
+    ) {
+      res.status(403).json({ error: "Forbidden", message: "Missing or invalid CSRF token" });
+      return;
+    }
   }
 
   try {

@@ -68,6 +68,7 @@ artifacts-monorepo/
 
 ```
 POST   /api/auth/login
+POST   /api/auth/logout
 GET    /api/auth/me
 GET    /api/hotels
 POST   /api/hotels
@@ -119,6 +120,12 @@ and rotate them.
 - `DATABASE_URL` — PostgreSQL connection (auto-provided by Replit)
 - `JWT_SECRET` — JWT signing secret (auto-provided or set manually)
 - `JWT_EXPIRES_IN` — session token lifetime (default `12h`)
+- `AUTH_COOKIE_SAMESITE` — `lax` (default), `strict` or `none`, for the web
+  client's session cookie. Use `none` **only** when the API and the web app are
+  on different sites, since it is what lets the browser attach the cookie
+  cross-site; it forces `Secure`, so that deployment must be HTTPS. Getting this
+  wrong is visible immediately — the browser drops the cookie and the web client
+  reports that sign-in could not be completed
 - `DATABASE_CA_CERT` — PEM certificate authority for the database TLS connection
 - `DATABASE_SSL_REJECT_UNAUTHORIZED` — set to `false` only to disable database
   certificate verification; leaves the connection open to interception
@@ -131,6 +138,23 @@ and rotate them.
 - `EXPO_PUBLIC_DOMAIN` — auto-set by Expo workflow to `$REPLIT_DEV_DOMAIN`
 - `PUBLIC_HOST` — fallback hostname for the Expo landing page when the request
   carries no valid Host header
+
+## Authentication
+
+Two transports over the same JWT:
+
+- **Native** sends `Authorization: Bearer`, holding the token in the
+  Keychain/Keystore.
+- **Web** sends `X-Auth-Transport: cookie` at login and gets the token back as
+  the httpOnly `holet_session` cookie instead — it is never in the response
+  body, so no script on the origin can read or persist it. Because the browser
+  attaches that cookie by itself, every non-GET request must also echo the
+  readable `holet_csrf` cookie in an `X-CSRF-Token` header. That token is signed
+  over the user id, so a value planted by anyone who can set cookies on the
+  domain does not verify against the session presenting it.
+
+Only the server can expire an httpOnly cookie, so web logout is a request
+(`POST /api/auth/logout`) rather than something the client does locally.
 
 ## Key Business Rules
 

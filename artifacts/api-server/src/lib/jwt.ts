@@ -35,3 +35,14 @@ export function verifyToken(token: string): JWTPayload {
   // Cast to unknown first to safely bridge the overlap issue
   return jwt.verify(token, JWT_SECRET) as unknown as JWTPayload;
 }
+
+/**
+ * When the token stops being accepted, so a session cookie can be given the
+ * same lifetime. Reading it back off the token keeps the two from drifting if
+ * JWT_EXPIRES_IN changes.
+ */
+export function tokenExpiry(token: string): Date | null {
+  const decoded = jwt.decode(token);
+  if (!decoded || typeof decoded === "string" || typeof decoded.exp !== "number") return null;
+  return new Date(decoded.exp * 1000);
+}
