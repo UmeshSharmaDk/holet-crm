@@ -114,12 +114,26 @@ export interface ApiResponse<T = any> {
 
 export async function api<T = any>(
   path: string,
-  options: { token?: string; method?: string; body?: unknown; formData?: FormData } = {},
+  options: {
+    token?: string;
+    method?: string;
+    body?: unknown;
+    formData?: FormData;
+    /** Extra request headers, e.g. X-Auth-Transport or X-CSRF-Token. */
+    headers?: Record<string, string>;
+    /** Cookies to send, as name/value pairs. fetch here keeps no cookie jar. */
+    cookies?: Record<string, string>;
+  } = {},
 ): Promise<ApiResponse<T>> {
-  const { token, method = "GET", body, formData } = options;
-  const headers: Record<string, string> = {};
+  const { token, method = "GET", body, formData, cookies } = options;
+  const headers: Record<string, string> = { ...options.headers };
   if (token) headers["Authorization"] = `Bearer ${token}`;
   if (body !== undefined) headers["Content-Type"] = "application/json";
+  if (cookies && Object.keys(cookies).length > 0) {
+    headers["Cookie"] = Object.entries(cookies)
+      .map(([name, value]) => `${name}=${encodeURIComponent(value)}`)
+      .join("; ");
+  }
 
   const res = await fetch(`${baseUrl}${path}`, {
     method,
@@ -142,4 +156,53 @@ export async function login(email: string, password: string = PASSWORD): Promise
     throw new Error(`login failed for ${email}: ${res.status} ${JSON.stringify(res.data)}`);
   }
   return res.data.token;
+}
+
+/**
+ * Parses Set-Cookie into name -> { value, attributes }.
+ *
+ * getSetCookie keeps the headers separate; reading the joined `set-cookie`
+ * string would split on the commas inside Expires dates.
+ */
+export interface ParsedCookie {
+  value: string;
+  attributes: Record<string, string>;
+}
+
+export function parseSetCookies(headers: Headers): Record<string, ParsedCookie> {
+  const out: Record<string, ParsedCookie> = {};
+  for (const raw of headers.getSetCookie()) {
+    const [pair, ...rest] = raw.split(";");
+    const eq = pair!.indexOf("=");
+    if (eq === -1) continue;
+    const attributes: Record<string, string> = {};
+    for (const attr of rest) {
+      const i = attr.indexOf("=");
+      if (i === -1) attributes[attr.trim().toLowerCase()] = "";
+      else attributes[attr.slice(0, i).trim().toLowerCase()] = attr.slice(i + 1).trim();
+    }
+    out[pair!.slice(0, eq).trim()] = {
+      value: decodeURIComponent(pair!.slice(eq + 1).trim()),
+      attributes,
+    };
+  }
+  return out;
+}
+
+/** Logs in over cookie transport and returns the cookies a browser would keep. */
+export async function loginWithCookies(
+  email: string,
+  password: string = PASSWORD,
+): Promise<{ cookies: Record<string, string>; body: any; raw: Record<string, ParsedCookie> }> {
+  const res = await api("/api/auth/login", {
+    method: "POST",
+    body: { email, password },
+    headers: { "X-Auth-Transport": "cookie" },
+  });
+  if (res.status !== 200) {
+    throw new Error(`cookie login failed for ${email}: ${res.status} ${JSON.stringify(res.data)}`);
+  }
+  const raw = parseSetCookies(res.headers);
+  const cookies = Object.fromEntries(Object.entries(raw).map(([name, c]) => [name, c.value]));
+  return { cookies, body: res.data, raw };
 }

@@ -45,7 +45,8 @@ export interface User {
 }
 
 export interface LoginResponse {
-  token: string;
+  /** Bearer token for native clients. Omitted when the request carried `X-Auth-Transport: cookie`, in which case the session is returned as an httpOnly cookie and never reaches the caller's JavaScript. */
+  token?: string;
   user: User;
 }
 

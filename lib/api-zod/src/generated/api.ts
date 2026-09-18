@@ -17,13 +17,27 @@ export const HealthCheckResponse = zod.object({
 /**
  * @summary Login with email and password
  */
+export const LoginHeader = zod.object({
+  "X-Auth-Transport": zod
+    .enum(["cookie"])
+    .optional()
+    .describe(
+      "Send `cookie` to receive the session as httpOnly `holet_session` and readable `holet_csrf` cookies instead of a token in the body.",
+    ),
+});
+
 export const LoginBody = zod.object({
   email: zod.string().email(),
   password: zod.string(),
 });
 
 export const LoginResponse = zod.object({
-  token: zod.string(),
+  token: zod
+    .string()
+    .optional()
+    .describe(
+      "Bearer token for native clients. Omitted when the request carried `X-Auth-Transport: cookie`, in which case the session is returned as an httpOnly cookie and never reaches the caller's JavaScript.",
+    ),
   user: zod.object({
     id: zod.number(),
     email: zod.string(),

@@ -2,8 +2,16 @@ import { Router } from "express";
 import bcrypt from "bcryptjs";
 import { db, usersTable, hotelsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
-import { signToken } from "../lib/jwt.js";
+import { signToken, tokenExpiry } from "../lib/jwt.js";
 import { requireAuth } from "../middlewares/auth.js";
+import {
+  SESSION_COOKIE,
+  clearSessionCookies,
+  csrfHeaderMatchesCookie,
+  issueSessionCookies,
+  readCookie,
+  wantsCookieSession,
+} from "../lib/cookies.js";
 
 const router = Router();
 
@@ -59,8 +67,22 @@ router.post("/login", async (req, res) => {
     }
 
     const { passwordHash: _, tokenVersion: __, ...userWithoutPassword } = user;
+    const profile = { ...userWithoutPassword, hotel };
 
-    res.json({ token, user: { ...userWithoutPassword, hotel } });
+    /**
+     * The web client asks for cookie transport, and then the token is never
+     * put in the response body at all — there is no JS-reachable copy for an
+     * injected script to steal, and none to persist in localStorage. Native
+     * clients say nothing and keep getting a Bearer token, which they hold in
+     * the Keychain/Keystore where a cookie would not help them.
+     */
+    if (wantsCookieSession(req)) {
+      issueSessionCookies(res, token, user.id, tokenExpiry(token));
+      res.json({ user: profile });
+      return;
+    }
+
+    res.json({ token, user: profile });
   } catch (error) {
     console.error("Login error:", error);
     res.status(500).json({ error: "Internal Server Error" });
@@ -97,6 +119,28 @@ router.get("/me", requireAuth, async (req, res) => {
     console.error("Get me error:", error);
     res.status(500).json({ error: "Internal Server Error" });
   }
+});
+
+/**
+ * Ends a cookie session.
+ *
+ * Only the server can clear an httpOnly cookie, so logging out has to be a
+ * request rather than something the client does locally. It deliberately does
+ * not require a valid token: a session whose token has expired or been revoked
+ * is exactly the one a user most needs to be able to clear.
+ *
+ * The CSRF check still applies where a session cookie is present, so another
+ * site cannot log a user out from under them. Bearer clients have no cookie to
+ * clear and get a successful no-op.
+ */
+router.post("/logout", (req, res) => {
+  if (readCookie(req, SESSION_COOKIE) && !csrfHeaderMatchesCookie(req)) {
+    res.status(403).json({ error: "Forbidden", message: "Missing or invalid CSRF token" });
+    return;
+  }
+
+  clearSessionCookies(res);
+  res.status(204).end();
 });
 
 export default router;
