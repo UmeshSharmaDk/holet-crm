@@ -9,6 +9,7 @@ import {
   parseOptionalId,
   text,
   email as validEmail,
+  password,
   oneOf,
   USER_ROLES,
   ValidationError,
@@ -16,19 +17,6 @@ import {
 } from "../lib/validate.js";
 
 const router = Router();
-
-const MIN_PASSWORD_LENGTH = 10;
-
-function password(raw: unknown): string {
-  const value = String(raw ?? "");
-  if (value.length < MIN_PASSWORD_LENGTH) {
-    throw new ValidationError(`password must be at least ${MIN_PASSWORD_LENGTH} characters`);
-  }
-  if (value.length > 200) {
-    throw new ValidationError("password must be at most 200 characters");
-  }
-  return value;
-}
 
 // Users joined to their hotel in one query rather than one lookup per user.
 function userQuery() {

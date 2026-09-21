@@ -140,6 +140,20 @@ export function optionalEmail(raw: unknown, field: string): string | null {
   return email(raw, field);
 }
 
+export const MIN_PASSWORD_LENGTH = 10;
+
+/** Shared by admin-driven and self-service password changes. */
+export function password(raw: unknown, field = "password"): string {
+  const value = String(raw ?? "");
+  if (value.length < MIN_PASSWORD_LENGTH) {
+    throw new ValidationError(`${field} must be at least ${MIN_PASSWORD_LENGTH} characters`);
+  }
+  if (value.length > 200) {
+    throw new ValidationError(`${field} must be at most 200 characters`);
+  }
+  return value;
+}
+
 /** Replies 400 for a ValidationError, otherwise re-throws. */
 export function handleValidationError(res: Response, error: unknown): boolean {
   if (error instanceof ValidationError) {

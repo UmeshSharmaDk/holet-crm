@@ -105,6 +105,60 @@ export function buildBookingUpdateEmail(
   };
 }
 
+export interface PasswordResetEmail {
+  subject: string;
+  html: string;
+  text: string;
+}
+
+/** Separated from sending, same as the booking-update template, so the escaping is verifiable without SMTP. */
+export function buildPasswordResetEmail(resetUrl: string, ttlMinutes: number): PasswordResetEmail {
+  const safeUrl = escapeHtml(resetUrl);
+
+  const html = `
+    <div style="font-family: Inter, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; background: #f7fafc; border-radius: 8px;">
+      <h2 style="color: #1a365d; margin-bottom: 16px;">Reset your password</h2>
+      <p style="color: #4a5568;">We received a request to reset the password for this account. This link expires in ${ttlMinutes} minutes and can only be used once.</p>
+      <p style="margin: 24px 0;">
+        <a href="${safeUrl}" style="background: #2d3748; color: white; padding: 10px 20px; border-radius: 6px; text-decoration: none;">Reset your password</a>
+      </p>
+      <p style="color: #718096; font-size: 12px;">If you did not request this, no action is needed — your password will not change unless you open this link.</p>
+      <p style="color: #718096; margin-top: 16px; font-size: 12px;">This is an automated notification from Hotel CRM.</p>
+    </div>
+  `;
+
+  const text = [
+    "We received a request to reset the password for this account.",
+    `This link expires in ${ttlMinutes} minutes and can only be used once:`,
+    resetUrl,
+    "",
+    "If you did not request this, no action is needed.",
+  ].join("\n");
+
+  return { subject: "Reset your Hotel CRM password", html, text };
+}
+
+export async function sendPasswordResetEmail(to: string, resetUrl: string, ttlMinutes: number): Promise<void> {
+  if (!process.env["SMTP_USER"] || !process.env["SMTP_PASS"]) {
+    console.log("SMTP not configured, skipping password reset email");
+    return;
+  }
+
+  const { subject, html, text } = buildPasswordResetEmail(resetUrl, ttlMinutes);
+
+  try {
+    await transporter.sendMail({
+      from: process.env["SMTP_USER"],
+      to,
+      subject,
+      html,
+      text,
+    });
+  } catch (error) {
+    console.error("Failed to send password reset email:", error);
+  }
+}
+
 export async function sendBookingUpdateEmail(
   ownerEmail: string,
   bookingId: number,
