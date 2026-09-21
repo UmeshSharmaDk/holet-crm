@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Colors from "@/constants/colors";
 import { useAuth } from "@/context/AuthContext";
 import { getAuthToken } from "@/lib/secureStorage";
+import { getCsrfHeader } from "@/lib/csrf";
 
 const C = Colors.light;
 const BASE_URL = process.env.EXPO_PUBLIC_DOMAIN ? `https://${process.env.EXPO_PUBLIC_DOMAIN}` : "";
@@ -69,9 +70,14 @@ export default function AIScreen() {
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50);
   }, [messages, loading]);
 
+  /**
+   * Every call these headers go on is a POST, so the CSRF header always
+   * applies too — on web it rides the cookie session, and the CSRF cookie
+   * that goes with it, rather than a Bearer token.
+   */
   async function authHeaders(): Promise<Record<string, string>> {
     const token = await getAuthToken();
-    return token ? { Authorization: `Bearer ${token}` } : {};
+    return { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...getCsrfHeader() };
   }
 
   async function send(text: string) {
@@ -87,6 +93,7 @@ export default function AIScreen() {
       const headers = await authHeaders();
       const res = await fetch(`${BASE_URL}/api/ai/chat`, {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json", ...headers },
         body: JSON.stringify({
           messages: next.map((m) => ({ role: m.role, content: m.content })),
@@ -112,6 +119,7 @@ export default function AIScreen() {
       const headers = await authHeaders();
       const res = await fetch(`${BASE_URL}/api/ai/chat`, {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json", ...headers },
         body: JSON.stringify({ confirmToken: action.token }),
       });
@@ -179,7 +187,12 @@ export default function AIScreen() {
         formData.append("audio", { uri, name: `audio.${ext}`, type: `audio/${ext === "m4a" ? "mp4" : ext}` } as any);
       }
       const headers = await authHeaders();
-      const res = await fetch(`${BASE_URL}/api/ai/stt`, { method: "POST", headers, body: formData });
+      const res = await fetch(`${BASE_URL}/api/ai/stt`, {
+        method: "POST",
+        credentials: "include",
+        headers,
+        body: formData,
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.message ?? "STT failed");
       if (data.text?.trim()) {
@@ -212,6 +225,7 @@ export default function AIScreen() {
       const headers = await authHeaders();
       const res = await fetch(`${BASE_URL}/api/ai/tts`, {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json", ...headers },
         body: JSON.stringify({ text: msg.content }),
       });

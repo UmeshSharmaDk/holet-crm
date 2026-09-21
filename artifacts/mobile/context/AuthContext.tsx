@@ -1,4 +1,5 @@
 import { router } from "expo-router";
+import { Platform } from "react-native";
 import React, { createContext, useContext, useEffect, useState, useMemo, ReactNode } from "react";
 import {
   getAuthToken,
@@ -8,6 +9,7 @@ import {
   setCachedUser,
   clearCachedUser,
 } from "@/lib/secureStorage";
+import { getCsrfHeader } from "@/lib/csrf";
 
 export type UserRole = "admin" | "owner" | "manager";
 
@@ -51,8 +53,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function loadStoredAuth() {
     try {
+      // Always null on web: getAuthToken no-ops there and purges any legacy
+      // value. There is nothing left for JS to read locally, so the only
+      // way to discover a web session is to ask the server — the /auth/me
+      // call below runs unconditionally on web, and the httpOnly cookie
+      // (if any) rides along automatically via `credentials: "include"`.
       const storedToken = await getAuthToken();
-      if (!storedToken) return;
+      if (Platform.OS !== "web" && !storedToken) return;
 
       // Render immediately from the cached profile, but never trust it: the
       // cache is editable on web, and role drives which screens are shown.
@@ -64,12 +71,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           await clearCachedUser();
         }
       }
-      setToken(storedToken);
+      if (storedToken) setToken(storedToken);
 
       // The server is the authority on who this token belongs to and what
-      // role it carries. A rejected token means the session is over.
+      // role it carries. A rejected token (or, on web, no valid cookie)
+      // means the session is over.
       const res = await fetch(`${BASE_URL}/api/auth/me`, {
-        headers: { Authorization: `Bearer ${storedToken}` },
+        credentials: "include",
+        headers: storedToken ? { Authorization: `Bearer ${storedToken}` } : {},
       });
       if (res.status === 401) {
         await clearSession();
@@ -99,6 +108,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   async function login(email: string, password: string) {
     const res = await fetch(`${BASE_URL}/api/auth/login`, {
       method: "POST",
+      credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password }),
     });
@@ -107,13 +117,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw new Error(body?.message ?? "Login failed");
     }
     const data = await res.json();
+    // On web this stores nothing (secureStorage no-ops there) — the session
+    // lives entirely in the httpOnly cookie the response just set.
     await setAuthToken(data.token);
     await setCachedUser(JSON.stringify(data.user));
-    setToken(data.token);
+    setToken(Platform.OS === "web" ? null : data.token);
     setUser(data.user);
   }
 
   async function logout() {
+    if (Platform.OS === "web") {
+      // JS cannot clear an httpOnly cookie itself, so ending a web session
+      // needs a round trip. Best-effort: the local clear below is what
+      // actually keeps this device out regardless of whether it succeeds.
+      await fetch(`${BASE_URL}/api/auth/logout`, {
+        method: "POST",
+        credentials: "include",
+        headers: getCsrfHeader(),
+      }).catch(() => {});
+    }
     await clearSession();
     router.replace("/login");
   }

@@ -8,6 +8,7 @@ import { recordAudit } from "../lib/audit.js";
 import { createPasswordResetToken, consumePasswordResetToken } from "../lib/passwordReset.js";
 import { sendPasswordResetEmail } from "../lib/email.js";
 import { password, handleValidationError } from "../lib/validate.js";
+import { setAuthCookies, clearAuthCookies } from "../lib/authCookies.js";
 
 const router = Router();
 
@@ -67,6 +68,10 @@ router.post("/login", async (req, res) => {
 
     const { passwordHash: _, tokenVersion: __, ...userWithoutPassword } = user;
 
+    // Native reads `token` from this body and holds it in the Keychain.
+    // The web client ignores it and relies on the cookie instead — nothing
+    // in the response is capable of putting the token where JS can read it.
+    setAuthCookies(res, token);
     res.json({ token, user: { ...userWithoutPassword, hotel } });
   } catch (error) {
     console.error("Login error:", error);
@@ -104,6 +109,18 @@ router.get("/me", requireAuth, async (req, res) => {
     console.error("Get me error:", error);
     res.status(500).json({ error: "Internal Server Error" });
   }
+});
+
+/**
+ * Clears the web session cookies. JS cannot delete an httpOnly cookie
+ * itself, so ending a cookie-based session needs a server round trip; a
+ * native client has nothing to clear here and this is a harmless no-op for
+ * it. Unauthenticated on purpose — logging out of a session that is already
+ * gone, or that was never a cookie session, must not itself require one.
+ */
+router.post("/logout", (_req, res) => {
+  clearAuthCookies(res);
+  res.status(204).send();
 });
 
 /**
@@ -248,6 +265,14 @@ router.post("/change-password", requireAuth, async (req, res) => {
       hotelId: user.hotelId,
       tokenVersion: nextTokenVersion,
     });
+
+    // A cookie session's old token just became invalid along with every
+    // other one — refresh the cookie itself, or this request would log its
+    // own browser session out. A Bearer caller gets the same continuity via
+    // the token in the body instead.
+    if (req.authSource === "cookie") {
+      setAuthCookies(res, token);
+    }
 
     res.json({ message: "Password changed successfully.", token });
   } catch (error) {

@@ -6,23 +6,28 @@ import * as SecureStore from "expo-secure-store";
  * Storage for the session token.
  *
  * On native the token goes to the Keychain/Keystore rather than AsyncStorage,
- * which is an unencrypted file on disk. On web there is no equivalent — Expo's
- * AsyncStorage is localStorage there — so the token stays in localStorage and
- * the defence is that nothing injects script into the origin (see the host
- * escaping in server/serve.js).
+ * which is an unencrypted file on disk.
+ *
+ * On web there is no such secure store — Expo's AsyncStorage is localStorage
+ * there, plainly readable by any script on the origin. The token used to be
+ * kept there anyway, defended only by there being no XSS to read it. It no
+ * longer is: the web client authenticates with an httpOnly cookie the server
+ * sets on login, which JS cannot read even if it is compromised. getAuthToken
+ * and setAuthToken are therefore no-ops on web; a token that already exists
+ * from before this change is actively purged, since a script that can read
+ * localStorage does not stop being a threat just because nothing new is
+ * written there.
  */
 const TOKEN_KEY = "auth_token";
 const USER_CACHE_KEY = "auth_user";
 
-const useSecureStore = Platform.OS !== "web";
+const isWeb = Platform.OS === "web";
+const useSecureStore = !isWeb;
 
 export async function getAuthToken(): Promise<string | null> {
-  if (!useSecureStore) {
-    try {
-      return await AsyncStorage.getItem(TOKEN_KEY);
-    } catch {
-      return null;
-    }
+  if (isWeb) {
+    await AsyncStorage.removeItem(TOKEN_KEY).catch(() => {});
+    return null;
   }
   try {
     const token = await SecureStore.getItemAsync(TOKEN_KEY);
@@ -41,10 +46,7 @@ export async function getAuthToken(): Promise<string | null> {
 }
 
 export async function setAuthToken(token: string): Promise<void> {
-  if (!useSecureStore) {
-    await AsyncStorage.setItem(TOKEN_KEY, token);
-    return;
-  }
+  if (isWeb) return;
   await SecureStore.setItemAsync(TOKEN_KEY, token);
   await AsyncStorage.removeItem(TOKEN_KEY).catch(() => {});
 }
