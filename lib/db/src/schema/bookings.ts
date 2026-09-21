@@ -1,13 +1,10 @@
-import { pgTable, serial, text, integer, timestamp, date, numeric, pgEnum, customType } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, integer, timestamp, date, numeric, pgEnum } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { hotelsTable } from "./hotels";
 import { agenciesTable } from "./agencies";
 
 export const bookingStatusEnum = pgEnum("booking_status", ["confirmed", "checked_in", "checked_out", "cancelled"]);
-const bytea = customType<{ data: Buffer; driverData: Buffer }>({
-  dataType: () => "bytea",
-});
 
 export const bookingsTable = pgTable("bookings", {
   id: serial("id").primaryKey(),
@@ -38,12 +35,19 @@ export const bookingGuestsTable = pgTable("booking_guests", {
   name: text("name").notNull(),
   dateOfBirth: date("date_of_birth"),
   relation: text("relation").notNull(),
-  frontIdData: bytea("front_id_data"),
+  // The bytes live encrypted on disk (lib/idFileStore.ts), not in Postgres —
+  // this row keeps only enough to find, verify and serve them: an opaque
+  // key, never a path or anything derived from the guest's own name.
+  frontIdKey: text("front_id_key"),
   frontIdMimeType: text("front_id_mime_type"),
   frontIdName: text("front_id_name"),
-  backIdData: bytea("back_id_data"),
+  frontIdChecksum: text("front_id_checksum"),
+  frontIdSize: integer("front_id_size"),
+  backIdKey: text("back_id_key"),
   backIdMimeType: text("back_id_mime_type"),
   backIdName: text("back_id_name"),
+  backIdChecksum: text("back_id_checksum"),
+  backIdSize: integer("back_id_size"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

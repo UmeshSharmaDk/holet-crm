@@ -1,6 +1,8 @@
 import { Router } from "express";
+import crypto from "node:crypto";
 import { db, bookingsTable, bookingGuestsTable, agenciesTable, hotelsTable, usersTable } from "@workspace/db";
 import { eq, and, between, gte, sql } from "drizzle-orm";
+import { storeIdImage, readIdImage, deleteIdImages } from "../lib/idFileStore.js";
 import { requireAuth, requireOwnerOrAdmin } from "../middlewares/auth.js";
 import { requireHotelScope, hotelFilter, denyOutOfScope, type HotelScope } from "../lib/scope.js";
 import {
@@ -129,8 +131,8 @@ async function fetchGuests(bookingId: number) {
       name: bookingGuestsTable.name,
       dateOfBirth: bookingGuestsTable.dateOfBirth,
       relation: bookingGuestsTable.relation,
-      hasFrontId: sql<boolean>`${bookingGuestsTable.frontIdData} IS NOT NULL`,
-      hasBackId: sql<boolean>`${bookingGuestsTable.backIdData} IS NOT NULL`,
+      hasFrontId: sql<boolean>`${bookingGuestsTable.frontIdKey} IS NOT NULL`,
+      hasBackId: sql<boolean>`${bookingGuestsTable.backIdKey} IS NOT NULL`,
     })
     .from(bookingGuestsTable)
     .where(eq(bookingGuestsTable.bookingId, bookingId))
@@ -266,12 +268,28 @@ router.get("/:bookingId/guests/:guestId/id/:side", requireAuth, requireHotelScop
       eq(bookingGuestsTable.id, guestId),
       eq(bookingGuestsTable.bookingId, bookingId),
     ));
-    const data = side === "front" ? guest?.frontIdData : guest?.backIdData;
+    const key = side === "front" ? guest?.frontIdKey : guest?.backIdKey;
     const mimeType = side === "front" ? guest?.frontIdMimeType : guest?.backIdMimeType;
     const fileName = side === "front" ? guest?.frontIdName : guest?.backIdName;
-    if (!guest || !data) {
+    const checksum = side === "front" ? guest?.frontIdChecksum : guest?.backIdChecksum;
+    if (!guest || !key) {
       res.status(404).json({ error: "Not Found" });
       return;
+    }
+
+    let data: Buffer;
+    try {
+      data = await readIdImage(key);
+    } catch (error) {
+      // The row says this scan exists but the file doesn't, or its auth tag
+      // failed to verify — either way there is nothing to serve, but it is
+      // worth knowing about: it means storage and the database disagree.
+      console.error(`[bookings] guest ${guestId} ${side} id scan (key ${key}) could not be read`, error);
+      res.status(404).json({ error: "Not Found" });
+      return;
+    }
+    if (checksum && crypto.createHash("sha256").update(data).digest("hex") !== checksum) {
+      console.error(`[bookings] guest ${guestId} ${side} id scan (key ${key}) failed its checksum after decryption`);
     }
 
     await recordAudit(req, {
@@ -324,46 +342,91 @@ router.post("/:id/guests", requireAuth, guestUploadLimiter, requireHotelScope, g
       ((req.files ?? []) as Express.Multer.File[]).map((file) => [file.fieldname, file]),
     );
 
-    const rows = guests.map((guest) => {
+    // Validated in a synchronous pass first, with no side effects, so a
+    // batch that fails partway (a bad personIndex on guest 3 of 4) never
+    // writes an ID image to disk for guest 1 or 2 and then discards the row
+    // that would have referenced it.
+    const validated = guests.map((guest) => {
       // personIndex addresses a row and a file field, so it must be a real
       // integer rather than whatever the client sent.
       const personIndex = count(guest.personIndex, "personIndex", NaN) - 1;
       if (!Number.isInteger(personIndex) || personIndex < 0 || personIndex >= guests.length) {
         throw new ValidationError("personIndex is out of range");
       }
-      const previous = existingByIndex.get(personIndex);
-      const frontFile = files.get(`front_${personIndex}`);
-      const backFile = files.get(`back_${personIndex}`);
-      const keepFront = guest.keepFrontId === true || guest.keepFrontId === "true";
-      const keepBack = guest.keepBackId === true || guest.keepBackId === "true";
-
       return {
-        bookingId,
         personIndex,
         name: text(guest.name, "guest name", 200),
         dateOfBirth: guest.dateOfBirth ? isoDate(guest.dateOfBirth, "dateOfBirth") : null,
         relation: text(guest.relation, "relation", 100),
-        frontIdData: frontFile?.buffer ?? (keepFront ? previous?.frontIdData ?? null : null),
-        frontIdMimeType: frontFile?.mimetype ?? (keepFront ? previous?.frontIdMimeType ?? null : null),
-        frontIdName: frontFile?.originalname ?? (keepFront ? previous?.frontIdName ?? null : null),
-        backIdData: backFile?.buffer ?? (keepBack ? previous?.backIdData ?? null : null),
-        backIdMimeType: backFile?.mimetype ?? (keepBack ? previous?.backIdMimeType ?? null : null),
-        backIdName: backFile?.originalname ?? (keepBack ? previous?.backIdName ?? null : null),
-        updatedAt: new Date(),
+        keepFront: guest.keepFrontId === true || guest.keepFrontId === "true",
+        keepBack: guest.keepBackId === true || guest.keepBackId === "true",
       };
     });
+
+    const rows = await Promise.all(validated.map(async (v) => {
+      const previous = existingByIndex.get(v.personIndex);
+      const frontFile = files.get(`front_${v.personIndex}`);
+      const backFile = files.get(`back_${v.personIndex}`);
+
+      const front = frontFile
+        ? await storeIdImage(frontFile.buffer)
+        : {
+            key: v.keepFront ? previous?.frontIdKey ?? null : null,
+            checksum: v.keepFront ? previous?.frontIdChecksum ?? null : null,
+            size: v.keepFront ? previous?.frontIdSize ?? null : null,
+          };
+      const back = backFile
+        ? await storeIdImage(backFile.buffer)
+        : {
+            key: v.keepBack ? previous?.backIdKey ?? null : null,
+            checksum: v.keepBack ? previous?.backIdChecksum ?? null : null,
+            size: v.keepBack ? previous?.backIdSize ?? null : null,
+          };
+
+      return {
+        bookingId,
+        personIndex: v.personIndex,
+        name: v.name,
+        dateOfBirth: v.dateOfBirth,
+        relation: v.relation,
+        frontIdKey: front.key,
+        frontIdMimeType: frontFile?.mimetype ?? (v.keepFront ? previous?.frontIdMimeType ?? null : null),
+        frontIdName: frontFile?.originalname ?? (v.keepFront ? previous?.frontIdName ?? null : null),
+        frontIdChecksum: front.checksum,
+        frontIdSize: front.size,
+        backIdKey: back.key,
+        backIdMimeType: backFile?.mimetype ?? (v.keepBack ? previous?.backIdMimeType ?? null : null),
+        backIdName: backFile?.originalname ?? (v.keepBack ? previous?.backIdName ?? null : null),
+        backIdChecksum: back.checksum,
+        backIdSize: back.size,
+        updatedAt: new Date(),
+      };
+    }));
 
     await db.transaction(async (tx) => {
       await tx.delete(bookingGuestsTable).where(eq(bookingGuestsTable.bookingId, bookingId));
       await tx.insert(bookingGuestsTable).values(rows);
     });
 
+    // Anything the old roster held that the new one doesn't carry forward —
+    // removed outright, or replaced by a fresh upload — is now unreferenced
+    // by any row and would otherwise sit on disk indefinitely.
+    const carriedForwardKeys = new Set(
+      rows.flatMap((r) => [r.frontIdKey, r.backIdKey]).filter((k): k is string => !!k),
+    );
+    const orphanedKeys = existing
+      .flatMap((g) => [g.frontIdKey, g.backIdKey])
+      .filter((k): k is string => !!k && !carriedForwardKeys.has(k));
+    if (orphanedKeys.length > 0) {
+      await deleteIdImages(orphanedKeys);
+    }
+
     await recordAudit(req, {
       action: "guest_roster.write",
       targetType: "booking",
       targetId: bookingId,
       hotelId: booking.hotelId,
-      detail: { guests: rows.length, withFrontId: rows.filter((r) => r.frontIdData).length },
+      detail: { guests: rows.length, withFrontId: rows.filter((r) => r.frontIdKey).length },
     });
 
     res.status(201).json(await fetchBookingWithGuests(bookingId));
@@ -509,8 +572,11 @@ router.put("/:id", requireAuth, requireHotelScope, async (req, res) => {
      * or beyond the new count is now surplus.
      *
      * Done in one transaction with the update so a booking can never be left
-     * disagreeing with its own roster.
+     * disagreeing with its own roster. The files those rows pointed at live
+     * outside that transaction, so their keys are collected here and deleted
+     * only once it has actually committed.
      */
+    const removedIdKeys: string[] = [];
     const [updated] = await db.transaction(async (tx) => {
       const [row] = await tx.update(bookingsTable).set({
         guestName: guestName !== undefined ? text(guestName, "guestName", 200) : existing.guestName,
@@ -538,9 +604,10 @@ router.put("/:id", requireAuth, requireHotelScope, async (req, res) => {
             eq(bookingGuestsTable.bookingId, bookingId),
             gte(bookingGuestsTable.personIndex, nextPersons),
           ))
-          .returning({ id: bookingGuestsTable.id });
+          .returning({ id: bookingGuestsTable.id, frontIdKey: bookingGuestsTable.frontIdKey, backIdKey: bookingGuestsTable.backIdKey });
 
         if (removed.length > 0) {
+          removedIdKeys.push(...removed.flatMap((g) => [g.frontIdKey, g.backIdKey]).filter((k): k is string => !!k));
           console.log(
             `[bookings] booking ${bookingId} reduced from ${existing.numberOfPersons} to ${nextPersons} persons; removed ${removed.length} guest record(s) and any ID scans held for them`,
           );
@@ -549,6 +616,10 @@ router.put("/:id", requireAuth, requireHotelScope, async (req, res) => {
 
       return [row];
     });
+
+    if (removedIdKeys.length > 0) {
+      await deleteIdImages(removedIdKeys);
+    }
 
     if (changes.length > 0) {
       const owners = await db
@@ -614,7 +685,21 @@ router.delete("/:id", requireAuth, requireOwnerOrAdmin, requireHotelScope, async
     }
     if (denyOutOfScope(res, req.hotelScope as HotelScope, existing.hotelId)) return;
 
+    // booking_guests cascades from bookings, but the files those rows point
+    // at live outside Postgres and are not part of that cascade — their
+    // keys have to be captured before the delete removes the rows carrying
+    // them, and cleaned up only once the delete has actually happened.
+    const guestFileKeys = (await db
+      .select({ frontIdKey: bookingGuestsTable.frontIdKey, backIdKey: bookingGuestsTable.backIdKey })
+      .from(bookingGuestsTable)
+      .where(eq(bookingGuestsTable.bookingId, bookingId)))
+      .flatMap((g) => [g.frontIdKey, g.backIdKey])
+      .filter((k): k is string => !!k);
+
     await db.delete(bookingsTable).where(eq(bookingsTable.id, bookingId));
+    if (guestFileKeys.length > 0) {
+      await deleteIdImages(guestFileKeys);
+    }
     await recordAudit(req, {
       action: "booking.delete",
       targetType: "booking",
