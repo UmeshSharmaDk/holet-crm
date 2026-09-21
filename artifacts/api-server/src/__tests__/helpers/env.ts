@@ -1,3 +1,5 @@
+import os from "node:os";
+
 /**
  * Test environment.
  *
@@ -24,3 +26,10 @@ process.env["RATE_LIMIT_MAX"] ??= "1000000";
 // Low enough that the upload budget can be exhausted in a test without
 // hundreds of requests, high enough that the other suites never reach it.
 process.env["GUEST_UPLOAD_RATE_LIMIT_PER_MINUTE"] ??= "40";
+
+// A fixed, obviously-not-real key — idFileStore.ts throws without one. Real
+// deployments must generate their own; this is a test fixture, not a default.
+process.env["ID_SCAN_ENCRYPTION_KEY"] ??= "a1".repeat(32);
+// Isolated from whatever default idFileStore.ts would otherwise pick, so a
+// test run's files never linger in — or collide with — a real one's.
+process.env["ID_SCAN_STORAGE_DIR"] ??= `${os.tmpdir()}/holet-crm-test-id-scans-${process.pid}`;
