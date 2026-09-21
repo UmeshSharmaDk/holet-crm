@@ -494,6 +494,38 @@ export async function executeTool(name: string, args: any, reqUser: any, scope: 
   return { error: `Unknown tool: ${name}` };
 }
 
+/**
+ * Builds the confirmation response for a proposed write.
+ *
+ * `viaRecordData` distinguishes two very different situations that otherwise
+ * look identical to the person confirming: a write the user's own message
+ * asked for, versus one the model decided to propose only after reading
+ * stored records (bookings, notes, guest names) that a prompt injection
+ * could have planted. The signed-confirmation gate already stops an
+ * injected instruction from executing on its own — this gives the human
+ * confirming it the one piece of context they need to catch it anyway,
+ * instead of trusting the assistant's summary of "what it read" for why.
+ */
+export function buildPendingActionResponse(
+  action: PendingAction,
+  userId: number,
+  viaRecordData: boolean,
+): { reply: string; pendingAction: { token: string; description: string; viaRecordData: boolean } } {
+  const description = describeAction(action);
+  const warning = viaRecordData
+    ? "\n\n⚠️ I'm proposing this after reading stored records, not directly from what you asked. " +
+      "Only confirm if this is actually what you want."
+    : "";
+  return {
+    reply: `${description} Please confirm to apply this change.${warning}`,
+    pendingAction: {
+      token: signAction(userId, action),
+      description,
+      viaRecordData,
+    },
+  };
+}
+
 /** Human-readable description of a write, shown on the confirmation prompt. */
 function describeAction(action: PendingAction): string {
   const a = action.args as any;
@@ -583,6 +615,10 @@ GUIDELINES:
 
     let safety = 0;
     let finalText = "";
+    // True once a round of tool results has been fed back to the model —
+    // i.e. once it has had a chance to read CRM records before proposing
+    // anything, rather than responding to the user's own message alone.
+    let sawUntrustedData = false;
     while (safety < MAX_TOOL_TURNS) {
       safety++;
       const response: any = await gemini.models.generateContent({
@@ -609,13 +645,7 @@ GUIDELINES:
       const mutating = functionCalls.find((fc: any) => MUTATING_TOOLS.has(fc.name));
       if (mutating) {
         const action: PendingAction = { name: mutating.name, args: mutating.args || {} };
-        res.json({
-          reply: `${describeAction(action)} Please confirm to apply this change.`,
-          pendingAction: {
-            token: signAction(reqUser.userId, action),
-            description: describeAction(action),
-          },
-        });
+        res.json(buildPendingActionResponse(action, reqUser.userId, sawUntrustedData));
         return;
       }
 
@@ -633,6 +663,7 @@ GUIDELINES:
         });
       }
       contents.push({ role: "user", parts: responseParts });
+      sawUntrustedData = true;
     }
 
     res.json({ reply: finalText || "Sorry, I couldn't generate a response." });
