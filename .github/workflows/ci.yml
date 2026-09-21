@@ -34,7 +34,7 @@ jobs:
       JWT_SECRET: ci-only-secret-not-used-anywhere-real
       # A fixed, obviously-not-real 32-byte key. idFileStore.ts throws at
       # import if this is missing or not 64 hex characters, same as JWT_SECRET.
-      ID_SCAN_ENCRYPTION_KEY: "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcd"
+      ID_SCAN_ENCRYPTION_KEY: "2b42f5d6f96957eaa7b74d04c7342ac17ed5fbb0a14c0611a23f32b6b4de7e59"
       NODE_ENV: test
 
     steps:
