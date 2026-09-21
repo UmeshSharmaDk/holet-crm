@@ -33,14 +33,24 @@ export interface AuditEntry {
  * access to a guest's ID at check-in, or leave a delete half-applied. The
  * trade-off is that a database problem degrades the trail, so the error is
  * logged loudly enough to be alerted on.
+ *
+ * `actorOverride` covers the one case where the acting account is not
+ * `req.user`: a self-service password reset happens by design before the
+ * caller is authenticated (the reset token stands in for a session), so
+ * without it the entry would misleadingly read "(unauthenticated)" for what
+ * is actually the account holder acting on their own account.
  */
-export async function recordAudit(req: Request, entry: AuditEntry): Promise<void> {
-  const user = req.user;
+export async function recordAudit(
+  req: Request,
+  entry: AuditEntry,
+  actorOverride?: { userId: number; email: string; role: string },
+): Promise<void> {
+  const actor = actorOverride ?? req.user;
   try {
     await db.insert(auditLogTable).values({
-      actorUserId: user?.userId ?? null,
-      actorEmail: user?.email ?? "(unauthenticated)",
-      actorRole: user?.role ?? null,
+      actorUserId: actor?.userId ?? null,
+      actorEmail: actor?.email ?? "(unauthenticated)",
+      actorRole: actor?.role ?? null,
       action: entry.action,
       targetType: entry.targetType,
       targetId: entry.targetId ?? null,
@@ -50,7 +60,7 @@ export async function recordAudit(req: Request, entry: AuditEntry): Promise<void
   } catch (error) {
     console.error(
       `[audit] FAILED to record ${entry.action} on ${entry.targetType}` +
-        `${entry.targetId != null ? ` ${entry.targetId}` : ""} by ${user?.email ?? "unknown"}`,
+        `${entry.targetId != null ? ` ${entry.targetId}` : ""} by ${actor?.email ?? "unknown"}`,
       error,
     );
   }

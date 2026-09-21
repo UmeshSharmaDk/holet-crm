@@ -99,6 +99,26 @@ const loginLimiter = rateLimit({
   message: { error: "Too Many Requests", message: "Too many login attempts, please try again later." },
 });
 
+/**
+ * Bounds how many reset emails one client can trigger for one account.
+ *
+ * Unlike login this never has a "failure" to skip — the response is
+ * identical whether or not the address exists — so every request counts
+ * against the budget, or the limiter would do nothing at all.
+ */
+const forgotPasswordLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: Number(process.env["PASSWORD_RESET_RATE_LIMIT_MAX"] ?? 5),
+  standardHeaders: true,
+  legacyHeaders: false,
+  store: new PostgresRateLimitStore("password-reset"),
+  keyGenerator: (req) => {
+    const email = typeof req.body?.email === "string" ? req.body.email.trim().toLowerCase() : "";
+    return `${clientKey(req.ip ?? "unknown")}|${email}`;
+  },
+  message: { error: "Too Many Requests", message: "Too many password reset requests, please try again later." },
+});
+
 // Applies to every route, including the root health check, so no path is
 // reachable at unbounded rate.
 app.use(limiter);
@@ -111,6 +131,7 @@ app.get("/", (_req, res) => {
 });
 
 app.use("/api/auth/login", loginLimiter);
+app.use("/api/auth/forgot-password", forgotPasswordLimiter);
 app.use("/api", router);
 
 // Unrouted paths get a JSON 404 rather than Express's default HTML page.
