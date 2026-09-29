@@ -2,7 +2,7 @@ import { Router } from "express";
 import crypto from "node:crypto";
 import { db, bookingsTable, bookingGuestsTable, agenciesTable, hotelsTable, usersTable } from "@workspace/db";
 import { eq, and, between, gte, sql } from "drizzle-orm";
-import { storeIdImage, readIdImage, deleteIdImages } from "../lib/idFileStore.js";
+import { storeIdImage, readIdImage, deleteIdImages, settleAndCleanUpOnFailure } from "../lib/idFileStore.js";
 import { requireAuth, requireOwnerOrAdmin } from "../middlewares/auth.js";
 import { requireHotelScope, hotelFilter, denyOutOfScope, type HotelScope } from "../lib/scope.js";
 import {
@@ -363,7 +363,12 @@ router.post("/:id/guests", requireAuth, guestUploadLimiter, requireHotelScope, g
       };
     });
 
-    const rows = await Promise.all(validated.map(async (v) => {
+    // A per-guest failure (or the transaction below failing) must not leave
+    // that guest's — or an earlier guest's — freshly-written file behind
+    // with nothing pointing at it. settleAndCleanUpOnFailure tracks which
+    // keys this request actually wrote, as opposed to ones merely carried
+    // forward unchanged, and deletes exactly those if anything fails.
+    const { values: rows, newKeys: newlyWrittenKeys } = await settleAndCleanUpOnFailure(validated.map((v) => async () => {
       const previous = existingByIndex.get(v.personIndex);
       const frontFile = files.get(`front_${v.personIndex}`);
       const backFile = files.get(`back_${v.personIndex}`);
@@ -384,29 +389,41 @@ router.post("/:id/guests", requireAuth, guestUploadLimiter, requireHotelScope, g
           };
 
       return {
-        bookingId,
-        personIndex: v.personIndex,
-        name: v.name,
-        dateOfBirth: v.dateOfBirth,
-        relation: v.relation,
-        frontIdKey: front.key,
-        frontIdMimeType: frontFile?.mimetype ?? (v.keepFront ? previous?.frontIdMimeType ?? null : null),
-        frontIdName: frontFile?.originalname ?? (v.keepFront ? previous?.frontIdName ?? null : null),
-        frontIdChecksum: front.checksum,
-        frontIdSize: front.size,
-        backIdKey: back.key,
-        backIdMimeType: backFile?.mimetype ?? (v.keepBack ? previous?.backIdMimeType ?? null : null),
-        backIdName: backFile?.originalname ?? (v.keepBack ? previous?.backIdName ?? null : null),
-        backIdChecksum: back.checksum,
-        backIdSize: back.size,
-        updatedAt: new Date(),
+        value: {
+          bookingId,
+          personIndex: v.personIndex,
+          name: v.name,
+          dateOfBirth: v.dateOfBirth,
+          relation: v.relation,
+          frontIdKey: front.key,
+          frontIdMimeType: frontFile?.mimetype ?? (v.keepFront ? previous?.frontIdMimeType ?? null : null),
+          frontIdName: frontFile?.originalname ?? (v.keepFront ? previous?.frontIdName ?? null : null),
+          frontIdChecksum: front.checksum,
+          frontIdSize: front.size,
+          backIdKey: back.key,
+          backIdMimeType: backFile?.mimetype ?? (v.keepBack ? previous?.backIdMimeType ?? null : null),
+          backIdName: backFile?.originalname ?? (v.keepBack ? previous?.backIdName ?? null : null),
+          backIdChecksum: back.checksum,
+          backIdSize: back.size,
+          updatedAt: new Date(),
+        },
+        newKeys: [frontFile ? front.key : null, backFile ? back.key : null].filter((k): k is string => !!k),
       };
     }));
 
-    await db.transaction(async (tx) => {
-      await tx.delete(bookingGuestsTable).where(eq(bookingGuestsTable.bookingId, bookingId));
-      await tx.insert(bookingGuestsTable).values(rows);
-    });
+    try {
+      await db.transaction(async (tx) => {
+        await tx.delete(bookingGuestsTable).where(eq(bookingGuestsTable.bookingId, bookingId));
+        await tx.insert(bookingGuestsTable).values(rows);
+      });
+    } catch (error) {
+      // Nothing this request wrote made it into a committed row, so none of
+      // it belongs on disk either — but only the keys this request itself
+      // wrote: a carried-forward key still belongs to the row the failed
+      // transaction left untouched, and must not be deleted out from under it.
+      await deleteIdImages(newlyWrittenKeys);
+      throw error;
+    }
 
     // Anything the old roster held that the new one doesn't carry forward —
     // removed outright, or replaced by a fresh upload — is now unreferenced

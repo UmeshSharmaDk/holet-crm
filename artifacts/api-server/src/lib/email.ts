@@ -4,6 +4,12 @@ const transporter = nodemailer.createTransport({
   host: process.env["SMTP_HOST"] ?? "smtp.gmail.com",
   port: parseInt(process.env["SMTP_PORT"] ?? "587"),
   secure: false,
+  // Port 587 negotiates TLS via STARTTLS after connecting in plaintext.
+  // Without requireTLS, that upgrade is opportunistic: an on-path attacker
+  // can strip the STARTTLS capability from the EHLO response and force the
+  // rest of the session — SMTP credentials, and password-reset links — over
+  // plaintext. This makes the upgrade mandatory instead of best-effort.
+  requireTLS: true,
   auth: {
     user: process.env["SMTP_USER"],
     pass: process.env["SMTP_PASS"],

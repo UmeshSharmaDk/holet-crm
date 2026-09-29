@@ -94,3 +94,55 @@ export async function deleteIdImage(key: string | null | undefined): Promise<voi
 export async function deleteIdImages(keys: Array<string | null | undefined>): Promise<void> {
   await Promise.all(keys.map(deleteIdImage));
 }
+
+export interface SettledOutcome<T> {
+  value: T;
+  /** Keys this one task actually wrote — not ones it merely carried forward unchanged. */
+  newKeys: string[];
+}
+
+export interface SettledBatch<T> {
+  values: T[];
+  /**
+   * Every key this batch itself wrote (not one merely carried forward
+   * unchanged). Kept so a caller whose *next* step fails — e.g. the DB
+   * write these values were headed for — can still clean up exactly the
+   * files this batch is responsible for, without also deleting a
+   * carried-forward key that some other, unrelated, already-committed row
+   * still points at.
+   */
+  newKeys: string[];
+}
+
+/**
+ * Runs a batch of independent tasks that may each write a file, and if any
+ * of them fails, deletes every file the *others* in the same batch already
+ * wrote before rethrowing. Plain Promise.all would discard those
+ * already-written keys entirely on a rejection — nothing would ever be left
+ * to clean them up, and they'd sit on disk unreferenced forever.
+ */
+export async function settleAndCleanUpOnFailure<T>(
+  tasks: Array<() => Promise<SettledOutcome<T>>>,
+): Promise<SettledBatch<T>> {
+  const settled = await Promise.allSettled(tasks.map((task) => task()));
+
+  const values: T[] = [];
+  const newKeys: string[] = [];
+  let failed = false;
+  let failure: unknown;
+  for (const outcome of settled) {
+    if (outcome.status === "fulfilled") {
+      values.push(outcome.value.value);
+      newKeys.push(...outcome.value.newKeys);
+    } else if (!failed) {
+      failed = true;
+      failure = outcome.reason;
+    }
+  }
+
+  if (failed) {
+    await deleteIdImages(newKeys);
+    throw failure;
+  }
+  return { values, newKeys };
+}
