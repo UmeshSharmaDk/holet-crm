@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { db, passwordResetTokensTable } from "@workspace/db";
-import { eq, lt } from "drizzle-orm";
+import { and, eq, gt, lt } from "drizzle-orm";
 
 const TOKEN_TTL_MS = Number(process.env["PASSWORD_RESET_TOKEN_TTL_MINUTES"] ?? 60) * 60_000;
 
@@ -50,19 +50,29 @@ export async function createPasswordResetToken(userId: number): Promise<string> 
  * Verifies and consumes a reset token, returning the user id it was issued
  * for, or null if it is missing, already used, or expired.
  *
- * Every outstanding token for the account is deleted on a successful
- * lookup — not just the one presented — so the token is single-use even if
- * the reset email was opened in two tabs.
+ * The lookup and the delete are one statement, not a SELECT followed by a
+ * DELETE — two concurrent requests with the same token (the reset email
+ * opened in two tabs, or a naive retry) would otherwise both pass the
+ * SELECT before either row was gone, both getting treated as a valid,
+ * single use of the token. `DELETE ... RETURNING` removes the row
+ * atomically, so only whichever request's DELETE actually matched a row
+ * gets a result back. The expiry check is part of the same WHERE clause
+ * rather than a check on the returned row, so an expired token is left
+ * alone for sweepExpiredTokens rather than deleted here.
  */
 export async function consumePasswordResetToken(rawToken: string): Promise<number | null> {
   const tokenHash = hashResetToken(rawToken);
   const [row] = await db
-    .select()
-    .from(passwordResetTokensTable)
-    .where(eq(passwordResetTokensTable.tokenHash, tokenHash));
+    .delete(passwordResetTokensTable)
+    .where(and(
+      eq(passwordResetTokensTable.tokenHash, tokenHash),
+      gt(passwordResetTokensTable.expiresAt, new Date()),
+    ))
+    .returning();
 
-  if (!row || row.expiresAt.getTime() <= Date.now()) return null;
+  if (!row) return null;
 
+  // Every other outstanding token for the account is now stale too.
   await db.delete(passwordResetTokensTable).where(eq(passwordResetTokensTable.userId, row.userId));
   return row.userId;
 }

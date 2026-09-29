@@ -363,6 +363,19 @@ router.post("/:id/guests", requireAuth, guestUploadLimiter, requireHotelScope, g
       };
     });
 
+    // Nothing above rejects two guests claiming the same slot: both pass the
+    // range check independently. Left unchecked, both would insert under the
+    // same personIndex — there being no unique constraint on it — silently
+    // dropping one guest's row from the roster while another index goes
+    // unfilled.
+    const seenIndexes = new Set<number>();
+    for (const guest of validated) {
+      if (seenIndexes.has(guest.personIndex)) {
+        throw new ValidationError("personIndex must be unique per guest");
+      }
+      seenIndexes.add(guest.personIndex);
+    }
+
     // A per-guest failure (or the transaction below failing) must not leave
     // that guest's — or an earlier guest's — freshly-written file behind
     // with nothing pointing at it. settleAndCleanUpOnFailure tracks which

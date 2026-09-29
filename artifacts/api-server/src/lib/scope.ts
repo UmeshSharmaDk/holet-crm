@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import { SQL, eq } from "drizzle-orm";
 import type { PgColumn } from "drizzle-orm/pg-core";
+import { toPositiveInteger } from "./validate.js";
 
 /**
  * Which hotels the current request is allowed to touch.
@@ -44,8 +45,8 @@ export function requireHotelScope(req: Request, res: Response, next: NextFunctio
       next();
       return;
     }
-    const hotelId = Number.parseInt(String(raw), 10);
-    if (!Number.isInteger(hotelId) || hotelId <= 0) {
+    const hotelId = toPositiveInteger(raw);
+    if (hotelId === null) {
       res.status(400).json({ error: "Bad Request", message: "hotelId must be a positive integer" });
       return;
     }
