@@ -130,4 +130,30 @@ describe("session authority and revocation", () => {
       assert.equal(other.status, 200, "throttling one account locked out another");
     });
   });
+
+  describe("duplicate email", () => {
+    // Postgres reports this as a raw driver error wrapped by drizzle-orm,
+    // which previously wasn't recognised as a conflict at all — both routes
+    // fell through to a bare 500 instead of the 409 they're meant to give.
+    it("rejects creating a second account with an email already in use", async () => {
+      await createUser("duplicate@test.local", "manager", 1);
+      const res = await api(`/api/users`, {
+        token: admin, method: "POST",
+        body: { email: "duplicate@test.local", name: "Second", password: "LongEnoughPassword1", role: "manager", hotelId: 1 },
+      });
+      assert.equal(res.status, 409);
+      assert.match(res.data.message, /email already in use/i);
+    });
+
+    it("rejects renaming an account to an email already in use", async () => {
+      await createUser("taken@test.local", "manager", 1);
+      const id = await createUser("changeme@test.local", "manager", 1);
+
+      const res = await api(`/api/users/${id}`, {
+        token: admin, method: "PUT", body: { email: "taken@test.local" },
+      });
+      assert.equal(res.status, 409);
+      assert.match(res.data.message, /email already in use/i);
+    });
+  });
 });

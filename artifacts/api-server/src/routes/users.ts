@@ -4,6 +4,7 @@ import { db, usersTable, hotelsTable } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
 import { requireAuth, requireAdmin } from "../middlewares/auth.js";
 import { recordAudit } from "../lib/audit.js";
+import { isUniqueViolation } from "../lib/dbErrors.js";
 import {
   parseIdParam,
   parseOptionalId,
@@ -79,7 +80,7 @@ router.post("/", requireAuth, requireAdmin, async (req, res) => {
     res.status(201).json(user);
   } catch (error: any) {
     if (handleValidationError(res, error)) return;
-    if (error?.code === "23505") {
+    if (isUniqueViolation(error)) {
       res.status(409).json({ error: "Conflict", message: "Email already in use" });
       return;
     }
@@ -166,7 +167,7 @@ router.put("/:id", requireAuth, requireAdmin, async (req, res) => {
     res.json(user);
   } catch (error: any) {
     if (handleValidationError(res, error)) return;
-    if (error?.code === "23505") {
+    if (isUniqueViolation(error)) {
       res.status(409).json({ error: "Conflict", message: "Email already in use" });
       return;
     }

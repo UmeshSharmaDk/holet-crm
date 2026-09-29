@@ -6,7 +6,7 @@ import { db, bookingsTable, hotelsTable, agenciesTable } from "@workspace/db";
 import { eq, and, between, sql, desc, count as sqlCount } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth.js";
 import { requireHotelScope, scopeAllows, hotelFilter, type HotelScope } from "../lib/scope.js";
-import { signAction, verifyAction, type PendingAction } from "../lib/actionToken.js";
+import { signAction, consumeAction, type PendingAction } from "../lib/actionToken.js";
 import {
   money,
   count as validCount,
@@ -559,9 +559,16 @@ router.post("/chat", requireAuth, aiLimiter, requireHotelScope, async (req, res)
     const messages = normalizeMessages(req.body?.messages);
 
     // A confirmed write runs directly — the model is not consulted about
-    // whether to proceed, only about how to summarise the outcome.
-    const confirmed = verifyAction(req.body?.confirmToken, reqUser.userId);
-    if (confirmed) {
+    // whether to proceed, only about how to summarise the outcome. Consuming
+    // the token (rather than only verifying it) is what stops a retry or a
+    // double-tap from applying the same write twice within its 10-minute TTL.
+    const consumed = await consumeAction(req.body?.confirmToken, reqUser.userId);
+    if (consumed.status === "already_used") {
+      res.json({ reply: "That confirmation was already used, so nothing was changed again. Ask me again if you still want to make this change." });
+      return;
+    }
+    if (consumed.status === "confirmed") {
+      const confirmed = consumed.action;
       let result: any;
       try {
         result = await executeTool(confirmed.name, confirmed.args, reqUser, scope);
