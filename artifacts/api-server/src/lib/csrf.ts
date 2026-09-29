@@ -20,5 +20,9 @@ export function generateCsrfToken(): string {
 export function csrfTokenMatches(req: { cookies?: Record<string, string>; headers: Record<string, unknown> }): boolean {
   const cookieValue = req.cookies?.[CSRF_COOKIE_NAME];
   const headerValue = req.headers[CSRF_HEADER_NAME];
-  return typeof cookieValue === "string" && cookieValue.length > 0 && cookieValue === headerValue;
+  if (typeof cookieValue !== "string" || cookieValue.length === 0 || typeof headerValue !== "string") return false;
+
+  const a = Buffer.from(cookieValue);
+  const b = Buffer.from(headerValue);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
 }

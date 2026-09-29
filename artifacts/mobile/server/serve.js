@@ -76,7 +76,6 @@ function serveManifest(platform, res) {
  * context.
  */
 const HOST_RE = /^[A-Za-z0-9.-]{1,253}(:\d{1,5})?$/;
-const PROTO_RE = /^https?$/;
 
 const FALLBACK_HOST = process.env.PUBLIC_HOST || "localhost";
 
@@ -88,11 +87,6 @@ function safeHost(req) {
     if (HOST_RE.test(value)) return value;
   }
   return FALLBACK_HOST;
-}
-
-function safeProto(req) {
-  const value = String(req.headers["x-forwarded-proto"] || "").split(",")[0].trim();
-  return PROTO_RE.test(value) ? value : "https";
 }
 
 function escapeHtml(value) {
@@ -110,12 +104,9 @@ function fill(template, placeholder, value) {
 }
 
 function serveLandingPage(req, res, landingPageTemplate, appName) {
-  const protocol = safeProto(req);
   const host = safeHost(req);
-  const baseUrl = `${protocol}://${host}`;
 
-  let html = fill(landingPageTemplate, "BASE_URL_PLACEHOLDER", baseUrl);
-  html = fill(html, "EXPS_URL_PLACEHOLDER", host);
+  let html = fill(landingPageTemplate, "EXPS_URL_PLACEHOLDER", host);
   html = fill(html, "APP_NAME_PLACEHOLDER", escapeHtml(appName));
 
   res.writeHead(200, {
