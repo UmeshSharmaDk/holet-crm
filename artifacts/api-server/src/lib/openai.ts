@@ -3,10 +3,10 @@ import { GoogleGenAI } from "@google/genai";
 const apiKey = process.env["GOOGLE_API_KEY"];
 
 if (!apiKey) {
-  console.warn("[gemini] Missing GOOGLE_API_KEY env var");
+  throw new Error("FATAL: GOOGLE_API_KEY environment variable is missing.");
 }
 
-export const gemini = new GoogleGenAI({ apiKey: apiKey || "missing" });
+export const gemini = new GoogleGenAI({ apiKey });
 
 export function pcmToWav(pcmBase64: string, sampleRate = 24000, channels = 1, bitsPerSample = 16): Buffer {
   const pcm = Buffer.from(pcmBase64, "base64");
