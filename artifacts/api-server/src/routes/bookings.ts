@@ -2,7 +2,7 @@ import { Router } from "express";
 import crypto from "node:crypto";
 import { db, bookingsTable, bookingGuestsTable, agenciesTable, hotelsTable, usersTable } from "@workspace/db";
 import { eq, and, between, gte, sql } from "drizzle-orm";
-import { storeIdImage, readIdImage, deleteIdImages, settleAndCleanUpOnFailure } from "../lib/idFileStore.js";
+import { storeIdImage, readIdImage, deleteIdImage, deleteIdImages, settleAndCleanUpOnFailure } from "../lib/idFileStore.js";
 import { requireAuth, requireOwnerOrAdmin } from "../middlewares/auth.js";
 import { requireHotelScope, hotelFilter, denyOutOfScope, type HotelScope } from "../lib/scope.js";
 import {
@@ -393,13 +393,25 @@ router.post("/:id/guests", requireAuth, guestUploadLimiter, requireHotelScope, g
             checksum: v.keepFront ? previous?.frontIdChecksum ?? null : null,
             size: v.keepFront ? previous?.frontIdSize ?? null : null,
           };
-      const back = backFile
-        ? await storeIdImage(backFile.buffer)
-        : {
-            key: v.keepBack ? previous?.backIdKey ?? null : null,
-            checksum: v.keepBack ? previous?.backIdChecksum ?? null : null,
-            size: v.keepBack ? previous?.backIdSize ?? null : null,
-          };
+
+      // If the back write now fails, the front write above already landed on
+      // disk — this task's promise is about to reject, which means it never
+      // reaches settleAndCleanUpOnFailure's newKeys collection (that only
+      // sees *fulfilled* outcomes). Without this, front.key would leak:
+      // written, never referenced by any row, never cleaned up by anything.
+      let back: { key: string | null; checksum: string | null; size: number | null };
+      try {
+        back = backFile
+          ? await storeIdImage(backFile.buffer)
+          : {
+              key: v.keepBack ? previous?.backIdKey ?? null : null,
+              checksum: v.keepBack ? previous?.backIdChecksum ?? null : null,
+              size: v.keepBack ? previous?.backIdSize ?? null : null,
+            };
+      } catch (error) {
+        if (frontFile) await deleteIdImage(front.key);
+        throw error;
+      }
 
       return {
         value: {

@@ -1,7 +1,7 @@
 import "./helpers/env.js";
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { storeIdImage, readIdImage, settleAndCleanUpOnFailure } from "../lib/idFileStore.js";
+import { storeIdImage, readIdImage, deleteIdImage, settleAndCleanUpOnFailure } from "../lib/idFileStore.js";
 
 const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0]);
 
@@ -51,6 +51,35 @@ describe("settleAndCleanUpOnFailure", () => {
     await assert.rejects(
       readIdImage(survivorKey),
       "the successful task's file was still readable after the batch it belonged to failed",
+    );
+  });
+
+  it("a task whose second write fails must clean up its own first write before rethrowing", async () => {
+    // Models the guest-roster route's per-guest task: front succeeds, then
+    // back throws. The task promise rejects *before* it ever returns a
+    // newKeys list, so settleAndCleanUpOnFailure never learns the front key
+    // exists — it is the task's own responsibility to not leave it behind.
+    let frontKey = "";
+    await assert.rejects(
+      settleAndCleanUpOnFailure([
+        async () => {
+          const front = await storeIdImage(JPEG);
+          frontKey = front.key;
+          try {
+            throw new Error("simulated back-write failure");
+          } catch (error) {
+            await deleteIdImage(front.key);
+            throw error;
+          }
+        },
+      ]),
+      /simulated back-write failure/,
+    );
+
+    assert.ok(frontKey, "the front write should have happened before the simulated failure");
+    await assert.rejects(
+      readIdImage(frontKey),
+      "the front file leaked on disk after the back write in the same task failed",
     );
   });
 
