@@ -15,6 +15,7 @@ import {
   optionalText,
   optionalEmail,
   oneOf,
+  toPositiveInteger,
   BOOKING_STATUSES,
   ValidationError,
 } from "../lib/validate.js";
@@ -185,8 +186,7 @@ const functionDeclarations: any[] = [
 /** The hotel a write should target, honouring the caller's scope. */
 function writeTargetHotelId(scope: HotelScope, requested: unknown): number | null {
   if (scope.kind === "hotel") return scope.hotelId;
-  const parsed = Number.parseInt(String(requested), 10);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+  return toPositiveInteger(requested);
 }
 
 /** Exported so the aggregation tools can be checked against the REST endpoints they mirror. */
@@ -212,10 +212,8 @@ export async function executeTool(name: string, args: any, reqUser: any, scope: 
     if (args.guestName) conditions.push(sql`LOWER(${bookingsTable.guestName}) LIKE LOWER(${'%' + String(args.guestName).slice(0, 200) + '%'})`);
 
     // The model controls this value, so it is clamped rather than trusted.
-    const requested = Number.parseInt(String(args.limit ?? 50), 10);
-    const limit = Number.isInteger(requested) && requested > 0
-      ? Math.min(requested, MAX_TOOL_ROWS)
-      : 50;
+    const requested = toPositiveInteger(args.limit ?? 50);
+    const limit = requested !== null ? Math.min(requested, MAX_TOOL_ROWS) : 50;
 
     const rows = conditions.length
       ? await db.select().from(bookingsTable).where(and(...conditions)).orderBy(desc(bookingsTable.checkIn)).limit(limit)
@@ -424,8 +422,8 @@ export async function executeTool(name: string, args: any, reqUser: any, scope: 
   }
 
   if (name === "revenue_summary") {
-    const year = Number.parseInt(String(args.year ?? new Date().getFullYear()), 10);
-    if (!Number.isInteger(year) || year < 1970 || year > 9999) return { error: "year must be a valid year" };
+    const year = toPositiveInteger(args.year ?? new Date().getFullYear());
+    if (year === null || year < 1970 || year > 9999) return { error: "year must be a valid year" };
 
     const yearFilter = sql`EXTRACT(YEAR FROM ${bookingsTable.checkIn}) = ${year}`;
     const where = scopeFilter ? and(yearFilter, scopeFilter) : yearFilter;
