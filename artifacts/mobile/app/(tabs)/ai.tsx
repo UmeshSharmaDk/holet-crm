@@ -25,6 +25,12 @@ interface ChatMsg {
   role: "user" | "assistant";
   content: string;
   id: string;
+  // Set when the server generated this reply after reading CRM record data
+  // (not just the user's own message). Echoed back in the resent history so
+  // a write proposed on a *later* turn still gets flagged as a possible
+  // second-order prompt injection, even though that later turn's own tool
+  // loop never itself read anything untrusted.
+  tainted?: boolean;
 }
 
 interface PendingAction {
@@ -96,12 +102,12 @@ export default function AIScreen() {
         credentials: "include",
         headers: { "Content-Type": "application/json", ...headers },
         body: JSON.stringify({
-          messages: next.map((m) => ({ role: m.role, content: m.content })),
+          messages: next.map((m) => ({ role: m.role, content: m.content, tainted: m.tainted })),
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.message ?? "AI error");
-      setMessages((prev) => [...prev, { role: "assistant", content: data.reply, id: String(Date.now() + 1) }]);
+      setMessages((prev) => [...prev, { role: "assistant", content: data.reply, id: String(Date.now() + 1), tainted: !!data.tainted }]);
       if (data.pendingAction?.token) setPending(data.pendingAction);
     } catch (e: any) {
       setMessages((prev) => [...prev, { role: "assistant", content: `⚠️ ${e?.message ?? "Failed"}`, id: String(Date.now() + 1) }]);
@@ -125,7 +131,7 @@ export default function AIScreen() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.message ?? "AI error");
-      setMessages((prev) => [...prev, { role: "assistant", content: data.reply, id: String(Date.now() + 1) }]);
+      setMessages((prev) => [...prev, { role: "assistant", content: data.reply, id: String(Date.now() + 1), tainted: !!data.tainted }]);
     } catch (e: any) {
       setMessages((prev) => [...prev, { role: "assistant", content: `⚠️ ${e?.message ?? "Failed"}`, id: String(Date.now() + 1) }]);
     } finally {

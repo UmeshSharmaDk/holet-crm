@@ -510,7 +510,7 @@ export function buildPendingActionResponse(
   action: PendingAction,
   userId: number,
   viaRecordData: boolean,
-): { reply: string; pendingAction: { token: string; description: string; viaRecordData: boolean } } {
+): { reply: string; tainted: boolean; pendingAction: { token: string; description: string; viaRecordData: boolean } } {
   const description = describeAction(action);
   const warning = viaRecordData
     ? "\n\n⚠️ I'm proposing this after reading stored records, not directly from what you asked. " +
@@ -518,6 +518,7 @@ export function buildPendingActionResponse(
     : "";
   return {
     reply: `${description} Please confirm to apply this change.${warning}`,
+    tainted: viaRecordData,
     pendingAction: {
       token: signAction(userId, action),
       description,
@@ -526,28 +527,55 @@ export function buildPendingActionResponse(
   };
 }
 
+/**
+ * Renders a single argument value for the confirmation prompt. The person
+ * confirming needs to see what they're actually approving — a field name
+ * alone ("guestEmail, status") hides exactly the content an injected
+ * instruction would have changed.
+ */
+function formatValue(v: unknown): string {
+  if (v === null || v === undefined || v === "") return "(empty)";
+  const s = typeof v === "number" ? String(v) : String(v);
+  return s.length > 120 ? `${s.slice(0, 120)}…` : s;
+}
+
 /** Human-readable description of a write, shown on the confirmation prompt. */
 function describeAction(action: PendingAction): string {
   const a = action.args as any;
   if (action.name === "create_booking") {
-    return `Create a booking for ${a.guestName ?? "(no name)"} from ${a.checkIn} to ${a.checkOut}, room rent ₹${a.roomRent ?? 0}.`;
+    const extras: string[] = [];
+    if (a.hotelId != null) extras.push(`hotel #${formatValue(a.hotelId)}`);
+    if (a.agencyId != null) extras.push(`agency #${formatValue(a.agencyId)}`);
+    if (a.status) extras.push(`status: ${formatValue(a.status)}`);
+    if (a.guestEmail) extras.push(`email: ${formatValue(a.guestEmail)}`);
+    if (a.guestPhone) extras.push(`phone: ${formatValue(a.guestPhone)}`);
+    if (a.notes) extras.push(`notes: "${formatValue(a.notes)}"`);
+    const extraText = extras.length ? ` [${extras.join(", ")}]` : "";
+    return `Create a booking for ${formatValue(a.guestName)} from ${a.checkIn} to ${a.checkOut}, room rent ₹${a.roomRent ?? 0}${extraText}.`;
   }
   if (action.name === "update_booking") {
     const fields = Object.keys(a).filter((k) => k !== "id");
-    return `Update booking #${a.id} (${fields.join(", ") || "no changes"}).`;
+    if (fields.length === 0) return `Update booking #${a.id} (no changes).`;
+    const changes = fields.map((k) => `${k} → ${formatValue(a[k])}`).join(", ");
+    return `Update booking #${a.id}: ${changes}.`;
   }
   return `Run ${action.name}.`;
 }
 
-function normalizeMessages(raw: unknown): { role: string; content: string }[] {
+/** Exported so the cross-turn taint-seeding behavior can be tested without a live model call. */
+export function normalizeMessages(raw: unknown): { role: string; content: string; tainted: boolean }[] {
   if (!Array.isArray(raw)) return [];
   return raw
     .slice(-MAX_MESSAGES)
-    .filter((m): m is { role: string; content: string } =>
+    .filter((m): m is { role: string; content: string; tainted?: unknown } =>
       !!m && typeof m === "object" && typeof (m as any).content === "string")
     .map((m) => ({
       role: m.role === "assistant" ? "assistant" : "user",
       content: String(m.content).slice(0, MAX_MESSAGE_CHARS),
+      // Client-echoed, so purely advisory (see sawUntrustedData below) — it
+      // can only make a confirmation prompt show an extra warning, never
+      // suppress one the server itself would otherwise add this turn.
+      tainted: m.tainted === true,
     }));
 }
 
@@ -625,7 +653,16 @@ GUIDELINES:
     // True once a round of tool results has been fed back to the model —
     // i.e. once it has had a chance to read CRM records before proposing
     // anything, rather than responding to the user's own message alone.
-    let sawUntrustedData = false;
+    //
+    // Each HTTP request only sees its own tool-calling loop, but the chat
+    // itself spans many requests — the client resends the whole history as
+    // plain text each turn. An instruction planted in a record can surface
+    // in one turn's reply and then, resent back on the next turn, look just
+    // like the model's own prior (trusted) output: a write proposed then
+    // would get no warning even though it's still a direct descendant of
+    // that untrusted read. Seeding this from any earlier turn the server
+    // itself marked `tainted` closes that gap.
+    let sawUntrustedData = messages.some((m) => m.role === "assistant" && m.tainted);
     while (safety < MAX_TOOL_TURNS) {
       safety++;
       const response: any = await gemini.models.generateContent({
@@ -673,7 +710,7 @@ GUIDELINES:
       sawUntrustedData = true;
     }
 
-    res.json({ reply: finalText || "Sorry, I couldn't generate a response." });
+    res.json({ reply: finalText || "Sorry, I couldn't generate a response.", tainted: sawUntrustedData });
   } catch (e: any) {
     // Upstream provider errors can carry endpoints, quota and project details.
     console.error("[ai/chat]", e);

@@ -61,8 +61,20 @@ export async function clearAuthToken(): Promise<void> {
 /**
  * Cached profile, used only to render something before /auth/me answers.
  * It is never the source of truth for role or hotel — the server is.
+ *
+ * No-op on web, same reasoning as the token above: AsyncStorage there is
+ * localStorage, and the cached profile is a full name/email/role/hotel
+ * record, not just an opaque token — exactly what an XSS on the origin
+ * would want to read. The server answer from /auth/me arrives moments
+ * later regardless (it runs unconditionally on web), so the cache only
+ * ever saved a brief loading flash, not anything required for the app to
+ * function.
  */
 export async function getCachedUser(): Promise<string | null> {
+  if (isWeb) {
+    await AsyncStorage.removeItem(USER_CACHE_KEY).catch(() => {});
+    return null;
+  }
   try {
     return await AsyncStorage.getItem(USER_CACHE_KEY);
   } catch {
@@ -71,6 +83,7 @@ export async function getCachedUser(): Promise<string | null> {
 }
 
 export async function setCachedUser(json: string): Promise<void> {
+  if (isWeb) return;
   await AsyncStorage.setItem(USER_CACHE_KEY, json).catch(() => {});
 }
 
