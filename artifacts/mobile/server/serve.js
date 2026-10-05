@@ -12,10 +12,23 @@
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
+const crypto = require("crypto");
 
 const STATIC_ROOT = path.resolve(__dirname, "..", "static-build");
 const TEMPLATE_PATH = path.resolve(__dirname, "templates", "landing-page.html");
 const basePath = (process.env.BASE_PATH || "/").replace(/\/+$/, "");
+
+/**
+ * Applied to every response. This process has no framework to supply
+ * defaults the way helmet() does for the API server (app.ts) — these are
+ * the same handful of headers, set by hand.
+ */
+const SECURITY_HEADERS = {
+  "x-content-type-options": "nosniff",
+  "x-frame-options": "DENY",
+  "referrer-policy": "no-referrer",
+  "strict-transport-security": "max-age=15552000; includeSubDomains",
+};
 
 const MIME_TYPES = {
   ".html": "text/html; charset=utf-8",
@@ -49,7 +62,7 @@ function serveManifest(platform, res) {
   const manifestPath = path.join(STATIC_ROOT, platform, "manifest.json");
 
   if (!fs.existsSync(manifestPath)) {
-    res.writeHead(404, { "content-type": "application/json" });
+    res.writeHead(404, { "content-type": "application/json", ...SECURITY_HEADERS });
     res.end(
       JSON.stringify({ error: `Manifest not found for platform: ${platform}` }),
     );
@@ -61,6 +74,7 @@ function serveManifest(platform, res) {
     "content-type": "application/json",
     "expo-protocol-version": "1",
     "expo-sfv-version": "0",
+    ...SECURITY_HEADERS,
   });
   res.end(manifest);
 }
@@ -105,14 +119,30 @@ function fill(template, placeholder, value) {
 
 function serveLandingPage(req, res, landingPageTemplate, appName) {
   const host = safeHost(req);
+  // Lets the one inline <script> block run under a CSP that otherwise
+  // blocks inline script outright — unlike 'unsafe-inline', a nonce can't
+  // be reused by anything an attacker might manage to inject, since it's
+  // fresh per response and never appears anywhere else in the page source.
+  const nonce = crypto.randomBytes(16).toString("base64");
 
   let html = fill(landingPageTemplate, "EXPS_URL_PLACEHOLDER", host);
   html = fill(html, "APP_NAME_PLACEHOLDER", escapeHtml(appName));
+  html = html.replace(/<script/g, `<script nonce="${nonce}"`);
 
   res.writeHead(200, {
     "content-type": "text/html; charset=utf-8",
-    "x-content-type-options": "nosniff",
-    "referrer-policy": "no-referrer",
+    ...SECURITY_HEADERS,
+    "content-security-policy": [
+      "default-src 'self'",
+      `script-src 'self' https://unpkg.com 'nonce-${nonce}'`,
+      "style-src 'self' 'unsafe-inline'",
+      "img-src 'self' data:",
+      "font-src 'self'",
+      "connect-src 'self'",
+      "frame-ancestors 'none'",
+      "base-uri 'none'",
+      "form-action 'self'",
+    ].join("; "),
   });
   res.end(html);
 }
@@ -122,13 +152,13 @@ function serveStaticFile(urlPath, res) {
   const filePath = path.join(STATIC_ROOT, safePath);
 
   if (!filePath.startsWith(STATIC_ROOT)) {
-    res.writeHead(403);
+    res.writeHead(403, SECURITY_HEADERS);
     res.end("Forbidden");
     return;
   }
 
   if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
-    res.writeHead(404);
+    res.writeHead(404, SECURITY_HEADERS);
     res.end("Not Found");
     return;
   }
@@ -136,7 +166,7 @@ function serveStaticFile(urlPath, res) {
   const ext = path.extname(filePath).toLowerCase();
   const contentType = MIME_TYPES[ext] || "application/octet-stream";
   const content = fs.readFileSync(filePath);
-  res.writeHead(200, { "content-type": contentType });
+  res.writeHead(200, { "content-type": contentType, ...SECURITY_HEADERS });
   res.end(content);
 }
 
@@ -149,12 +179,15 @@ const server = http.createServer((req, res) => {
     // Parsed against a fixed base: an invalid Host header must not throw here.
     pathname = new URL(req.url || "/", "http://placeholder.invalid").pathname;
   } catch {
-    res.writeHead(400, { "content-type": "text/plain" });
+    res.writeHead(400, { "content-type": "text/plain", ...SECURITY_HEADERS });
     res.end("Bad Request");
     return;
   }
 
-  if (basePath && pathname.startsWith(basePath)) {
+  // A plain startsWith would also match "/appXYZ" for BASE_PATH=/app,
+  // stripping to "XYZ" instead of leaving an unrelated path alone — the
+  // prefix has to end the segment, not just share a run of characters.
+  if (basePath && (pathname === basePath || pathname.startsWith(`${basePath}/`))) {
     pathname = pathname.slice(basePath.length) || "/";
   }
 
