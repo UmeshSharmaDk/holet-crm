@@ -8,6 +8,7 @@ import { requireHotelScope, hotelFilter, denyOutOfScope, type HotelScope } from 
 import {
   parseIdParam,
   parseOptionalId,
+  toPositiveInteger,
   money,
   count,
   isoDate,
@@ -173,8 +174,8 @@ router.get("/", requireAuth, requireHotelScope, async (req, res) => {
       if (aid === "null" || aid === "direct" || aid === "") {
         conditions.push(sql`${bookingsTable.agencyId} IS NULL`);
       } else {
-        const parsed = Number.parseInt(aid, 10);
-        if (!Number.isInteger(parsed) || parsed <= 0) {
+        const parsed = toPositiveInteger(aid);
+        if (parsed === null) {
           res.status(400).json({ error: "Bad Request", message: "agencyId must be a positive integer" });
           return;
         }
@@ -185,9 +186,9 @@ router.get("/", requireAuth, requireHotelScope, async (req, res) => {
     if (date) {
       conditions.push(eq(bookingsTable.checkIn, isoDate(date, "date")));
     } else if (month && year) {
-      const m = Number.parseInt(month as string, 10);
-      const y = Number.parseInt(year as string, 10);
-      if (!Number.isInteger(m) || m < 1 || m > 12 || !Number.isInteger(y) || y < 1970 || y > 9999) {
+      const m = toPositiveInteger(month);
+      const y = toPositiveInteger(year);
+      if (m === null || m < 1 || m > 12 || y === null || y < 1970 || y > 9999) {
         res.status(400).json({ error: "Bad Request", message: "month must be 1-12 and year must be a valid year" });
         return;
       }
