@@ -1,5 +1,6 @@
 import { getAuthToken } from "./secureStorage";
 import { getCsrfHeader } from "./csrf";
+import { refreshAfterWrite } from "./query-client";
 
 const BASE_URL = process.env.EXPO_PUBLIC_DOMAIN ? `https://${process.env.EXPO_PUBLIC_DOMAIN}` : "";
 
@@ -47,8 +48,9 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     const body = await res.json().catch(() => ({}));
     throw new ApiError(body?.message ?? `Request failed: ${res.status}`, res.status, body);
   }
-  if (res.status === 204) return undefined as T;
-  return res.json();
+  const data = res.status === 204 ? undefined : await res.json();
+  if (MUTATING_METHODS.has(method)) await refreshAfterWrite(path);
+  return data as T;
 }
 
 async function upload<T>(path: string, body: FormData): Promise<T> {
@@ -63,7 +65,9 @@ async function upload<T>(path: string, body: FormData): Promise<T> {
     const responseBody = await res.json().catch(() => ({}));
     throw new Error(responseBody?.message ?? `Request failed: ${res.status}`);
   }
-  return res.json();
+  const data = await res.json();
+  await refreshAfterWrite(path);
+  return data as T;
 }
 
 export const api = {

@@ -3,10 +3,10 @@ import { db, consumedActionTokensTable } from "@workspace/db";
 import { lt } from "drizzle-orm";
 import { isUniqueViolation } from "./dbErrors.js";
 
-const JWT_SECRET = process.env["JWT_SECRET"] as string;
+const JWT_SECRET = (process.env["JWT_SECRET"] ?? process.env["SESSION_SECRET"]) as string;
 
 if (!JWT_SECRET) {
-  throw new Error("FATAL: JWT_SECRET environment variable is missing.");
+  throw new Error("FATAL: JWT_SECRET or SESSION_SECRET environment variable is missing.");
 }
 
 // Separate key material so an action token can never be mistaken for a session token.

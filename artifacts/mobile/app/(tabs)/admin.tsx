@@ -4,7 +4,6 @@ import React, { useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  FlatList,
   Platform,
   Pressable,
   StyleSheet,
@@ -16,6 +15,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Colors from "@/constants/colors";
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api";
+import { FlatList } from "@/components/RefreshablePages";
 
 const C = Colors.light;
 

@@ -6,7 +6,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
-  ScrollView,
+  ScrollView as NativeScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -17,6 +17,8 @@ import Colors from "@/constants/colors";
 import { useAuth } from "@/context/AuthContext";
 import { getAuthToken } from "@/lib/secureStorage";
 import { getCsrfHeader } from "@/lib/csrf";
+import { ScrollView } from "@/components/RefreshablePages";
+import { queryClient } from "@/lib/query-client";
 
 const C = Colors.light;
 const BASE_URL = process.env.EXPO_PUBLIC_DOMAIN ? `https://${process.env.EXPO_PUBLIC_DOMAIN}` : "";
@@ -61,7 +63,7 @@ export default function AIScreen() {
   // A write the assistant proposed. It is only applied when the user confirms,
   // so text hidden inside a CRM record cannot drive a change on its own.
   const [pending, setPending] = useState<PendingAction | null>(null);
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<NativeScrollView>(null);
   const soundRef = useRef<Audio.Sound | null>(null);
   const webRecorderRef = useRef<MediaRecorder | null>(null);
   const webChunksRef = useRef<Blob[]>([]);
@@ -131,6 +133,10 @@ export default function AIScreen() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.message ?? "AI error");
+      // Confirmed AI actions can change several resource types, so refresh all
+      // mounted data and mark the other pages stale without failing the save.
+      await queryClient.invalidateQueries({ refetchType: "active" })
+        .catch((error) => console.error("Related data refresh failed:", error));
       setMessages((prev) => [...prev, { role: "assistant", content: data.reply, id: String(Date.now() + 1), tainted: !!data.tainted }]);
     } catch (e: any) {
       setMessages((prev) => [...prev, { role: "assistant", content: `⚠️ ${e?.message ?? "Failed"}`, id: String(Date.now() + 1) }]);

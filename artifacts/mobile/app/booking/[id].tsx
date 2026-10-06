@@ -6,7 +6,6 @@ import {
   Alert,
   Pressable,
   RefreshControl,
-  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -16,6 +15,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Colors from "@/constants/colors";
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api";
+import { ScrollView } from "@/components/RefreshablePages";
 
 const C = Colors.light;
 

@@ -3,7 +3,6 @@ import { router, useLocalSearchParams } from "expo-router";
 import React, { useMemo } from "react";
 import {
   ActivityIndicator,
-  FlatList,
   Pressable,
   RefreshControl,
   StyleSheet,
@@ -14,6 +13,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery } from "@tanstack/react-query";
 import Colors from "@/constants/colors";
 import { api } from "@/lib/api";
+import { FlatList } from "@/components/RefreshablePages";
 
 const C = Colors.light;
 
@@ -90,17 +90,18 @@ export default function AgencyBookingsScreen() {
 
       {isLoading ? (
         <View style={styles.centered}><ActivityIndicator size="large" color={C.accent} /></View>
-      ) : !bookings || bookings.length === 0 ? (
-        <View style={styles.centered}>
-          <Feather name="inbox" size={40} color={C.border} />
-          <Text style={styles.emptyText}>No bookings for this agency</Text>
-        </View>
       ) : (
         <FlatList
           data={bookings}
           keyExtractor={(b) => String(b.id)}
           contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: insets.bottom + 24 }}
           renderItem={({ item }) => <BookingCard booking={item} />}
+          ListEmptyComponent={
+            <View style={styles.centered}>
+              <Feather name="inbox" size={40} color={C.border} />
+              <Text style={styles.emptyText}>No bookings for this agency</Text>
+            </View>
+          }
           refreshControl={<RefreshControl refreshing={isFetching} onRefresh={refetch} tintColor={C.accent} />}
         />
       )}

@@ -8,7 +8,6 @@ import {
   Platform,
   Pressable,
   RefreshControl,
-  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -20,6 +19,7 @@ import Colors from "@/constants/colors";
 import { useAuth } from "@/context/AuthContext";
 import { HotelPicker, useEffectiveHotelId } from "@/components/HotelPicker";
 import { api } from "@/lib/api";
+import { ScrollView } from "@/components/RefreshablePages";
 
 const C = Colors.light;
 const { width: SCREEN_W } = Dimensions.get("window");

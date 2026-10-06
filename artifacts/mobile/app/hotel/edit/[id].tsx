@@ -7,7 +7,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -17,6 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Colors from "@/constants/colors";
 import { api } from "@/lib/api";
+import { ScrollView } from "@/components/RefreshablePages";
 
 const C = Colors.light;
 
@@ -36,7 +36,7 @@ export default function EditHotelScreen() {
 
   useEffect(() => {
     if (hotel) setForm({ name: hotel.name, totalRooms: String(hotel.totalRooms) });
-  }, [hotel]);
+  }, [hotel?.id]);
 
   const mutation = useMutation({
     mutationFn: (data: any) => api.put(`/hotels/${id}`, data),

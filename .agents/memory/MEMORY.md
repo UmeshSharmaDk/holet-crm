@@ -1,0 +1,1 @@
+- [Refresh behavior](refresh-behavior.md) — related pages must refresh after record changes, without overwriting unsaved form drafts.
