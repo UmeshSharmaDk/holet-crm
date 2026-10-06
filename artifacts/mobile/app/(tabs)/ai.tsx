@@ -85,7 +85,7 @@ export default function AIScreen() {
    */
   async function authHeaders(): Promise<Record<string, string>> {
     const token = await getAuthToken();
-    return { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...getCsrfHeader() };
+    return { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...await getCsrfHeader() };
   }
 
   async function send(text: string) {

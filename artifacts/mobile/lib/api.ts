@@ -40,7 +40,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     headers: {
       "Content-Type": "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(MUTATING_METHODS.has(method) ? getCsrfHeader() : {}),
+      ...(MUTATING_METHODS.has(method) ? await getCsrfHeader() : {}),
       ...options.headers,
     },
   });
@@ -59,7 +59,7 @@ async function upload<T>(path: string, body: FormData): Promise<T> {
     method: "POST",
     body,
     credentials: "include",
-    headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...getCsrfHeader() },
+    headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...await getCsrfHeader() },
   });
   if (!res.ok) {
     const responseBody = await res.json().catch(() => ({}));

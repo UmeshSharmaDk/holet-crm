@@ -63,6 +63,25 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /auth/csrf:
+    get:
+      operationId: getCsrfToken
+      tags: [auth]
+      summary: Read the session CSRF token for an allowed web origin
+      security: []
+      responses:
+        "200":
+          description: Current CSRF token, or null when there is no session cookie
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [csrfToken]
+                properties:
+                  csrfToken:
+                    type: string
+                    nullable: true
+
   /auth/me:
     get:
       operationId: getMe

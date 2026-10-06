@@ -109,7 +109,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const res = await fetch(`${BASE_URL}/api/auth/login`, {
       method: "POST",
       credentials: "include",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...await getCsrfHeader() },
       body: JSON.stringify({ email, password }),
     });
     if (!res.ok) {
@@ -133,7 +133,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await fetch(`${BASE_URL}/api/auth/logout`, {
         method: "POST",
         credentials: "include",
-        headers: getCsrfHeader(),
+        headers: await getCsrfHeader(),
       }).catch(() => {});
     }
     await clearSession();

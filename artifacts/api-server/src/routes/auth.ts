@@ -9,6 +9,7 @@ import { createPasswordResetToken, consumePasswordResetToken } from "../lib/pass
 import { sendPasswordResetEmail } from "../lib/email.js";
 import { password, handleValidationError } from "../lib/validate.js";
 import { setAuthCookies, clearAuthCookies } from "../lib/authCookies.js";
+import { CSRF_COOKIE_NAME } from "../lib/csrf.js";
 
 const router = Router();
 
@@ -23,6 +24,14 @@ const PASSWORD_RESET_URL_BASE = process.env["PASSWORD_RESET_URL_BASE"] ?? "https
  * before mounting a password attack. Both paths now pay the same cost.
  */
 const DUMMY_HASH = bcrypt.hashSync("holet-crm-invalid-credentials-placeholder", 12);
+
+// The Expo web preview and API have separate hosts. Only CORS-approved
+// origins can read this response; the httpOnly session token stays private.
+// This also works with an expired session so signing in again can pass CSRF.
+router.get("/csrf", (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  res.json({ csrfToken: req.cookies?.[CSRF_COOKIE_NAME] ?? null });
+});
 
 router.post("/login", async (req, res) => {
   try {

@@ -271,6 +271,10 @@ export interface RevenueStats {
   totalYearlyRevenue: number;
 }
 
+export type GetCsrfToken200 = {
+  csrfToken: string | null;
+};
+
 export type ListBookingsParams = {
   month?: number;
   year?: number;
