@@ -1,3 +1,4 @@
 - [Refresh behavior](refresh-behavior.md) — related pages must refresh after record changes, without overwriting unsaved form drafts.
 - [Web session hosts](web-session-hosts.md) — Expo preview cannot read API-host cookies; preserve cookie auth and use the approved CSRF freshness path.
 - [Gesture verification](gesture-verification.md) — verify actual routes and requests; root touch handlers and navigator snapshots can misrepresent behavior.
+- [Expo dependency alignment](expo-dependency-alignment.md) — keep shared React types SDK-compatible and check transitive type resolution in pnpm workspaces.
