@@ -13,13 +13,24 @@ interface ReportBooking {
   status: string; notes: string | null; createdAt: Date; updatedAt: Date;
   hotel: { name: string } | null; agency: { name: string } | null;
 }
-interface StoredGuest {
+export interface StoredGuest {
   id: number; person_index: number; name: string; date_of_birth: string | null; relation: string;
   front_id_key?: string | null; back_id_key?: string | null;
   front_id_data?: Buffer | null; back_id_data?: Buffer | null;
   front_id_checksum?: string | null; back_id_checksum?: string | null;
+  front_id_size?: number | null; back_id_size?: number | null;
+  front_id_mime_type?: string | null; back_id_mime_type?: string | null;
+  front_id_name?: string | null; back_id_name?: string | null;
 }
 export class BookingDocumentError extends Error {}
+
+export async function readStoredGuests(bookingId: number, guestId?: number) {
+  const result = await pool.query<StoredGuest>(
+    `SELECT g.*, date_of_birth::text AS date_of_birth FROM booking_guests g WHERE booking_id = $1${guestId === undefined ? "" : " AND id = $2"} ORDER BY person_index`,
+    guestId === undefined ? [bookingId] : [bookingId, guestId],
+  );
+  return result.rows;
+}
 
 // Only presence flags leave the server. This supports existing bytea scans
 // and encrypted file references without migrating or exposing either storage.
@@ -53,13 +64,10 @@ async function imageFor(guest: StoredGuest, side: "front" | "back") {
 }
 
 export async function createBookingPdf(booking: ReportBooking): Promise<Buffer> {
-  const result = await pool.query<StoredGuest>(
-    "SELECT g.*, date_of_birth::text AS date_of_birth FROM booking_guests g WHERE booking_id = $1 ORDER BY person_index",
-    [booking.id],
-  );
+  const storedGuests = await readStoredGuests(booking.id);
   const guests = [];
   // Sequential decoding bounds the peak memory used by uploaded documents.
-  for (const guest of result.rows) {
+  for (const guest of storedGuests) {
     guests.push({ ...guest, front: await imageFor(guest, "front"), back: await imageFor(guest, "back") });
   }
   const fontCandidates = [

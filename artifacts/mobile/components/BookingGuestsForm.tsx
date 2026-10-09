@@ -125,7 +125,9 @@ export function bookingGuestsToFormData(
 ): FormData {
   const formData = new FormData();
   formData.append("guests", JSON.stringify(value.persons.map((person, personIndex) => ({
-    personIndex,
+    // Upload DTO uses one-based person numbers; stored profiles and file
+    // field names use zero-based indexes.
+    personIndex: personIndex + 1,
     name: personIndex === 0 ? mainGuestName.trim() : person.name.trim(),
     dateOfBirth: person.dateOfBirth || null,
     relation: personIndex === 0 ? "Main guest" : person.relation.trim(),
@@ -143,7 +145,8 @@ export function bookingGuestsToFormData(
 
 function appendImage(formData: FormData, fieldName: string, image: IdImage) {
   if (Platform.OS === "web" && image.file) {
-    formData.append(fieldName, image.file, image.name);
+    const file = image.file.type ? image.file : new Blob([image.file], { type: image.type });
+    formData.append(fieldName, file, image.name);
   } else {
     formData.append(fieldName, {
       uri: image.uri,

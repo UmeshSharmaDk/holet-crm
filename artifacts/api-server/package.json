@@ -10,6 +10,7 @@
     "test": "node --import tsx --test --test-concurrency=1 src/__tests__/*.test.ts"
   },
   "dependencies": {
+    "@google-cloud/storage": "^8.3.0",
     "@google/genai": "^1.50.1",
     "@types/multer": "^2.1.0",
     "@workspace/api-zod": "workspace:*",

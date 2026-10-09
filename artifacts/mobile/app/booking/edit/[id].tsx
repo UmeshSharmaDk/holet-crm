@@ -129,8 +129,8 @@ export default function EditBookingScreen() {
         qc.invalidateQueries({ queryKey: ["bookings"] });
         router.back();
       } catch (error: any) {
-        Alert.alert("Booking updated", error.message ?? "Booking saved, but guest details could not be uploaded.");
-        router.back();
+        Alert.alert("Guest details not saved",
+          `Booking details were updated, but guest details/photos were not saved. ${error.message ?? ""}\nYour selected photos are still here. Tap Save Changes to try again.`);
       } finally {
         setSavingGuestDetails(false);
       }

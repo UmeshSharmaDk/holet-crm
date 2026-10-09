@@ -59,6 +59,7 @@ export default function NewBookingScreen() {
   });
   const [guestDetails, setGuestDetails] = useState<BookingGuestsState>(() => emptyBookingGuests(1));
   const [savingGuestDetails, setSavingGuestDetails] = useState(false);
+  const [savedBookingId, setSavedBookingId] = useState<number | null>(null);
 
   const { data: agencies } = useQuery<Agency[]>({
     queryKey: ["agencies"],
@@ -66,8 +67,15 @@ export default function NewBookingScreen() {
   });
 
   const createMutation = useMutation({
-    mutationFn: (data: any) => api.post("/bookings", data),
+    mutationFn: async (data: any) => {
+      if (savedBookingId !== null) {
+        await api.put(`/bookings/${savedBookingId}`, data);
+        return { id: savedBookingId };
+      }
+      return api.post("/bookings", data);
+    },
     onSuccess: async (booking: any) => {
+      setSavedBookingId(booking.id);
       try {
         setSavingGuestDetails(true);
         await api.upload(`/bookings/${booking.id}/guests`, bookingGuestsToFormData(guestDetails, form.guestName));
@@ -75,8 +83,8 @@ export default function NewBookingScreen() {
         qc.invalidateQueries({ queryKey: ["dashboard-stats"] });
         router.replace(`/booking/${booking.id}` as any);
       } catch (error: any) {
-        Alert.alert("Booking created", error.message ?? "Booking saved, but guest details could not be uploaded.");
-        router.replace(`/booking/${booking.id}` as any);
+        Alert.alert("Guest details not saved",
+          `Booking #${booking.id} exists, but guest details/photos were not saved. ${error.message ?? ""}\nYour selected photos are still here. Tap Retry Save to try again without creating another booking.`);
       } finally {
         setSavingGuestDetails(false);
       }
@@ -271,7 +279,7 @@ export default function NewBookingScreen() {
         >
            {createMutation.isPending || savingGuestDetails
             ? <ActivityIndicator color="#fff" size="small" />
-            : <><Feather name="plus" size={20} color="#fff" /><Text style={styles.submitText}>Create Booking</Text></>}
+            : <><Feather name={savedBookingId === null ? "plus" : "save"} size={20} color="#fff" /><Text style={styles.submitText}>{savedBookingId === null ? "Create Booking" : "Retry Save"}</Text></>}
         </Pressable>
       </KeyboardAwareScrollViewCompat>
     </View>

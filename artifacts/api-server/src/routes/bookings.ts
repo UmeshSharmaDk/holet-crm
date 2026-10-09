@@ -1,6 +1,6 @@
 import { Router } from "express";
 import crypto from "node:crypto";
-import { createBookingPdf, BookingDocumentError, readGuestProfiles } from "../lib/bookingPdf.js";
+import { createBookingPdf, BookingDocumentError, readGuestProfiles, readStoredGuests } from "../lib/bookingPdf.js";
 import { db, bookingsTable, bookingGuestsTable, agenciesTable, hotelsTable, usersTable } from "@workspace/db";
 import { eq, and, between, gte, sql } from "drizzle-orm";
 import { storeIdImage, readIdImage, deleteIdImage, deleteIdImages, settleAndCleanUpOnFailure } from "../lib/idFileStore.js";
@@ -58,7 +58,12 @@ const guestUpload = multer({
   fileFilter: (_req, file, callback) => {
     // Declared by the client, so it gates storage only; what is served back is
     // re-checked against the same allowlist on the way out.
-    callback(null, ID_IMAGE_MIME.has(file.mimetype));
+    if (ID_IMAGE_MIME.has(file.mimetype)) callback(null, true);
+    else {
+      const error = new multer.MulterError("LIMIT_UNEXPECTED_FILE", file.fieldname);
+      error.message = "Identity photos must be JPEG, PNG, WebP, HEIC, or HEIF images.";
+      callback(error);
+    }
   },
 });
 
@@ -282,22 +287,20 @@ router.get("/:bookingId/guests/:guestId/id/:side", requireAuth, requireHotelScop
     }
     if (denyOutOfScope(res, req.hotelScope as HotelScope, booking.hotelId)) return;
 
-    const [guest] = await db.select().from(bookingGuestsTable).where(and(
-      eq(bookingGuestsTable.id, guestId),
-      eq(bookingGuestsTable.bookingId, bookingId),
-    ));
-    const key = side === "front" ? guest?.frontIdKey : guest?.backIdKey;
-    const mimeType = side === "front" ? guest?.frontIdMimeType : guest?.backIdMimeType;
-    const fileName = side === "front" ? guest?.frontIdName : guest?.backIdName;
-    const checksum = side === "front" ? guest?.frontIdChecksum : guest?.backIdChecksum;
-    if (!guest || !key) {
+    const [guest] = await readStoredGuests(bookingId, guestId);
+    const key = guest?.[`${side}_id_key`];
+    const legacy = guest?.[`${side}_id_data`];
+    const mimeType = guest?.[`${side}_id_mime_type`];
+    const fileName = guest?.[`${side}_id_name`];
+    const checksum = guest?.[`${side}_id_checksum`];
+    if (!guest || (!key && !legacy)) {
       res.status(404).json({ error: "Not Found" });
       return;
     }
 
     let data: Buffer;
     try {
-      data = await readIdImage(key);
+      data = key ? await readIdImage(key) : legacy!;
     } catch (error) {
       // The row says this scan exists but the file doesn't, or its auth tag
       // failed to verify — either way there is nothing to serve, but it is
@@ -354,7 +357,15 @@ router.post("/:id/guests", requireAuth, guestUploadLimiter, requireHotelScope, g
       return;
     }
 
-    const existing = await db.select().from(bookingGuestsTable).where(eq(bookingGuestsTable.bookingId, bookingId));
+    const existing = (await readStoredGuests(bookingId)).map((guest) => ({
+      personIndex: guest.person_index,
+      frontIdKey: guest.front_id_key, backIdKey: guest.back_id_key,
+      frontIdChecksum: guest.front_id_checksum, backIdChecksum: guest.back_id_checksum,
+      frontIdSize: guest.front_id_size, backIdSize: guest.back_id_size,
+      frontIdMimeType: guest.front_id_mime_type, backIdMimeType: guest.back_id_mime_type,
+      frontIdName: guest.front_id_name, backIdName: guest.back_id_name,
+      frontLegacy: guest.front_id_data, backLegacy: guest.back_id_data,
+    }));
     const existingByIndex = new Map(existing.map((guest) => [guest.personIndex, guest]));
     const files = new Map(
       ((req.files ?? []) as Express.Multer.File[]).map((file) => [file.fieldname, file]),
@@ -403,9 +414,12 @@ router.post("/:id/guests", requireAuth, guestUploadLimiter, requireHotelScope, g
       const previous = existingByIndex.get(v.personIndex);
       const frontFile = files.get(`front_${v.personIndex}`);
       const backFile = files.get(`back_${v.personIndex}`);
+      const promoteFront = v.keepFront && !previous?.frontIdKey && !!previous?.frontLegacy;
+      const promoteBack = v.keepBack && !previous?.backIdKey && !!previous?.backLegacy;
 
       const front = frontFile
         ? await storeIdImage(frontFile.buffer)
+        : promoteFront ? await storeIdImage(previous!.frontLegacy!)
         : {
             key: v.keepFront ? previous?.frontIdKey ?? null : null,
             checksum: v.keepFront ? previous?.frontIdChecksum ?? null : null,
@@ -421,13 +435,14 @@ router.post("/:id/guests", requireAuth, guestUploadLimiter, requireHotelScope, g
       try {
         back = backFile
           ? await storeIdImage(backFile.buffer)
+          : promoteBack ? await storeIdImage(previous!.backLegacy!)
           : {
               key: v.keepBack ? previous?.backIdKey ?? null : null,
               checksum: v.keepBack ? previous?.backIdChecksum ?? null : null,
               size: v.keepBack ? previous?.backIdSize ?? null : null,
             };
       } catch (error) {
-        if (frontFile) await deleteIdImage(front.key);
+        if (frontFile || promoteFront) await deleteIdImage(front.key);
         throw error;
       }
 
@@ -450,7 +465,7 @@ router.post("/:id/guests", requireAuth, guestUploadLimiter, requireHotelScope, g
           backIdSize: back.size,
           updatedAt: new Date(),
         },
-        newKeys: [frontFile ? front.key : null, backFile ? back.key : null].filter((k): k is string => !!k),
+        newKeys: [frontFile || promoteFront ? front.key : null, backFile || promoteBack ? back.key : null].filter((k): k is string => !!k),
       };
     }));
 
