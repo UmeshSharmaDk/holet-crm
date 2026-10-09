@@ -1,5 +1,6 @@
 import { Router } from "express";
 import crypto from "node:crypto";
+import { createBookingPdf, BookingDocumentError, readGuestProfiles } from "../lib/bookingPdf.js";
 import { db, bookingsTable, bookingGuestsTable, agenciesTable, hotelsTable, usersTable } from "@workspace/db";
 import { eq, and, between, gte, sql } from "drizzle-orm";
 import { storeIdImage, readIdImage, deleteIdImage, deleteIdImages, settleAndCleanUpOnFailure } from "../lib/idFileStore.js";
@@ -125,19 +126,7 @@ async function fetchBooking(id: number) {
  * /guests/:guestId/id/:side route.
  */
 async function fetchGuests(bookingId: number) {
-  return db
-    .select({
-      id: bookingGuestsTable.id,
-      personIndex: bookingGuestsTable.personIndex,
-      name: bookingGuestsTable.name,
-      dateOfBirth: bookingGuestsTable.dateOfBirth,
-      relation: bookingGuestsTable.relation,
-      hasFrontId: sql<boolean>`${bookingGuestsTable.frontIdKey} IS NOT NULL`,
-      hasBackId: sql<boolean>`${bookingGuestsTable.backIdKey} IS NOT NULL`,
-    })
-    .from(bookingGuestsTable)
-    .where(eq(bookingGuestsTable.bookingId, bookingId))
-    .orderBy(bookingGuestsTable.personIndex);
+  return readGuestProfiles(bookingId);
 }
 
 async function fetchBookingWithGuests(id: number) {
@@ -207,6 +196,34 @@ router.get("/", requireAuth, requireHotelScope, async (req, res) => {
     if (handleValidationError(res, error)) return;
     console.error(error);
     res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+router.get("/:id/pdf", requireAuth, requireHotelScope, async (req, res) => {
+  try {
+    const bookingId = parseIdParam(res, req.params.id);
+    if (bookingId === null) return;
+    const row = await fetchBooking(bookingId);
+    if (!row) { res.status(404).json({ message: "Booking not found" }); return; }
+    if (denyOutOfScope(res, req.hotelScope as HotelScope, row.booking.hotelId)) return;
+    const pdf = await createBookingPdf(shapeBooking(row));
+    await recordAudit(req, {
+      action: "booking.pdf_export", targetType: "booking", targetId: bookingId,
+      hotelId: row.booking.hotelId, detail: { includesIdentityDocuments: true },
+    });
+    res.set({
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `attachment; filename="booking-${bookingId}.pdf"`,
+      "Cache-Control": "private, no-store",
+      "X-Content-Type-Options": "nosniff",
+    }).send(pdf);
+  } catch (error) {
+    if (error instanceof BookingDocumentError) {
+      res.status(422).json({ message: error.message });
+    } else {
+      console.error("Booking PDF export failed", error);
+      res.status(500).json({ message: "Unable to generate the booking PDF. Please try again." });
+    }
   }
 });
 

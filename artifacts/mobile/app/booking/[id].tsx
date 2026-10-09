@@ -1,10 +1,11 @@
 import { Feather } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
-import React from "react";
+import React, { useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   Pressable,
+  Platform,
   RefreshControl,
   StyleSheet,
   Text,
@@ -16,6 +17,7 @@ import Colors from "@/constants/colors";
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api";
 import { ScrollView } from "@/components/RefreshablePages";
+import { exportBookingDocument } from "@/lib/booking-pdf";
 
 const C = Colors.light;
 
@@ -61,6 +63,19 @@ export default function BookingDetailScreen() {
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
   const qc = useQueryClient();
+  const [exporting, setExporting] = useState(false);
+
+  async function exportPdf(mode: "download" | "print") {
+    if (exporting || !booking) return;
+    setExporting(true);
+    try {
+      await exportBookingDocument(booking.id, mode);
+    } catch (error) {
+      Alert.alert("PDF export failed", error instanceof Error ? error.message : "Please try again.");
+    } finally {
+      setExporting(false);
+    }
+  }
 
   const { data: booking, isLoading, refetch, isFetching } = useQuery<Booking>({
     queryKey: ["booking", id],
@@ -218,6 +233,22 @@ export default function BookingDetailScreen() {
         </View>
 
         <View style={styles.actionButtons}>
+          <View style={styles.pdfActions}>
+            <Pressable onPress={() => exportPdf("download")} disabled={exporting}
+              accessibilityRole="button" accessibilityLabel="Download booking PDF" testID="download-booking-pdf"
+              style={[styles.pdfButton, exporting && { opacity: 0.5 }]}>
+              <Feather name="download" size={18} color={C.accent} />
+              <Text style={styles.pdfButtonText}>{Platform.OS === "web" ? "Download PDF" : "Save / Share PDF"}</Text>
+            </Pressable>
+            <Pressable onPress={() => exportPdf("print")} disabled={exporting}
+              accessibilityRole="button" accessibilityLabel="Print booking form" testID="print-booking-pdf"
+              style={[styles.pdfButton, exporting && { opacity: 0.5 }]}>
+              <Feather name="printer" size={18} color={C.accent} />
+              <Text style={styles.pdfButtonText}>Print PDF</Text>
+            </Pressable>
+          </View>
+          {exporting && <ActivityIndicator color={C.accent} />}
+          <Text style={styles.pdfHelp}>Includes guest details and identity scans. Compact A4 layout; extra pages only when needed.</Text>
           <Pressable
             style={({ pressed }) => [styles.paymentBtn, pressed && { opacity: 0.85 }]}
             onPress={() => router.push(`/booking/payment/${id}` as any)}
@@ -257,6 +288,10 @@ function formatDate(d: string) {
 }
 
 const styles = StyleSheet.create({
+  pdfActions: { flexDirection: "row", gap: 10 },
+  pdfButton: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 14, borderWidth: 1, borderColor: C.border, borderRadius: 12, backgroundColor: C.surface },
+  pdfButtonText: { color: C.accent, fontFamily: "Inter_600SemiBold", fontSize: 13 },
+  pdfHelp: { color: C.textSecondary, fontFamily: "Inter_400Regular", fontSize: 11, lineHeight: 16 },
   container: { flex: 1, backgroundColor: C.background },
   topBar: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingBottom: 12, gap: 12 },
   backBtn: { padding: 4 },

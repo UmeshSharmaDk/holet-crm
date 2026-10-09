@@ -484,6 +484,34 @@ paths:
               schema:
                 $ref: "#/components/schemas/Booking"
 
+  /bookings/{id}/pdf:
+    get:
+      operationId: exportBookingPdf
+      tags: [bookings]
+      summary: Download the complete booking form with guest identity documents
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Compact A4 booking report including available identity scans
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        "401":
+          description: Authentication required
+        "404":
+          description: Booking not found or not accessible to the user's hotel
+        "422":
+          description: An uploaded identity document cannot be read or converted
+
   /bookings/{id}:
     get:
       operationId: getBooking

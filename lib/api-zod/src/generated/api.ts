@@ -385,6 +385,13 @@ export const CreateBookingBody = zod.object({
 });
 
 /**
+ * @summary Download the complete booking form with guest identity documents
+ */
+export const ExportBookingPdfParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+/**
  * @summary Get a booking by ID
  */
 export const GetBookingParams = zod.object({

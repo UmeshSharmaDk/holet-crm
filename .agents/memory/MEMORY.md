@@ -4,3 +4,4 @@
 - [Expo dependency alignment](expo-dependency-alignment.md) — keep shared React types SDK-compatible and check transitive type resolution in pnpm workspaces.
 - [Post-merge schema safety](post-merge-schema-safety.md) — unrelated merges must not force database schema reconciliation; use reviewed migrations for persistence changes.
 - [Date field policy](date-fields.md) — all editable dates need pickers on web and native, including birth dates and booking dates in create/edit forms.
+- [Booking reports](booking-reports.md) — PDF exports include all booking data and identity scans; prefer one A4 page without truncation and preserve access controls.
