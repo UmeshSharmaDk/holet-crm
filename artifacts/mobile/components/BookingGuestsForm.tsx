@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import Colors from "@/constants/colors";
 import { DatePickerField } from "@/components/DatePickerField";
+import { prepareIdImage } from "@/lib/prepareIdImage";
 
 const C = Colors.light;
 
@@ -119,10 +120,10 @@ export function validateBookingGuests(
   return null;
 }
 
-export function bookingGuestsToFormData(
+export async function bookingGuestsToFormData(
   value: BookingGuestsState,
   mainGuestName: string,
-): FormData {
+): Promise<FormData> {
   const formData = new FormData();
   formData.append("guests", JSON.stringify(value.persons.map((person, personIndex) => ({
     // Upload DTO uses one-based person numbers; stored profiles and file
@@ -135,11 +136,13 @@ export function bookingGuestsToFormData(
     keepBackId: Boolean(person.hasBackId && !value.idSlots.some((slot) => slot.guestIndex === personIndex && slot.back)),
   }))));
 
-  value.idSlots.forEach((slot) => {
-    if (slot.guestIndex === null) return;
-    if (slot.front) appendImage(formData, `front_${slot.guestIndex}`, slot.front);
-    if (slot.back) appendImage(formData, `back_${slot.guestIndex}`, slot.back);
-  });
+  // Sequential preparation bounds memory, including rosters with many photos.
+  // Doing this at save time also handles large photos already in a retry draft.
+  for (const slot of value.idSlots) {
+    if (slot.guestIndex === null) continue;
+    if (slot.front) appendImage(formData, `front_${slot.guestIndex}`, await prepareIdImage(slot.front));
+    if (slot.back) appendImage(formData, `back_${slot.guestIndex}`, await prepareIdImage(slot.back));
+  }
   return formData;
 }
 

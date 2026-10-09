@@ -78,7 +78,7 @@ export default function NewBookingScreen() {
       setSavedBookingId(booking.id);
       try {
         setSavingGuestDetails(true);
-        await api.upload(`/bookings/${booking.id}/guests`, bookingGuestsToFormData(guestDetails, form.guestName));
+        await api.upload(`/bookings/${booking.id}/guests`, await bookingGuestsToFormData(guestDetails, form.guestName));
         qc.invalidateQueries({ queryKey: ["bookings"] });
         qc.invalidateQueries({ queryKey: ["dashboard-stats"] });
         router.replace(`/booking/${booking.id}` as any);

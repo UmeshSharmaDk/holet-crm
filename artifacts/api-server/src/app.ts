@@ -178,7 +178,11 @@ app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     res.status(403).json({ error: "Forbidden", message: "Origin not allowed" });
     return;
   }
-  if (err?.type === "entity.too.large" || err?.code === "LIMIT_FILE_SIZE") {
+  if (err?.code === "LIMIT_FILE_SIZE") {
+    res.status(413).json({ error: "Payload Too Large", message: "Each identity photo must be smaller than 2 MB. The app automatically resizes photos before upload; reload the updated app and try saving again." });
+    return;
+  }
+  if (err?.type === "entity.too.large") {
     res.status(413).json({ error: "Payload Too Large", message: "Request body is too large" });
     return;
   }

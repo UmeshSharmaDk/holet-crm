@@ -124,7 +124,7 @@ export default function EditBookingScreen() {
     onSuccess: async () => {
       try {
         setSavingGuestDetails(true);
-        await api.upload(`/bookings/${id}/guests`, bookingGuestsToFormData(guestDetails, form.guestName));
+        await api.upload(`/bookings/${id}/guests`, await bookingGuestsToFormData(guestDetails, form.guestName));
         qc.invalidateQueries({ queryKey: ["booking", id] });
         qc.invalidateQueries({ queryKey: ["bookings"] });
         router.back();
