@@ -16,6 +16,7 @@ import { useAuth } from "@/context/AuthContext";
 import { HotelPicker, useEffectiveHotelId } from "@/components/HotelPicker";
 import { api } from "@/lib/api";
 import { ScrollView } from "@/components/RefreshablePages";
+import { BrandLogo } from "@/components/BrandLogo";
 
 const C = Colors.light;
 
@@ -95,6 +96,7 @@ export default function DashboardScreen() {
           <Text style={styles.date}>{today}</Text>
         </View>
         <View style={styles.headerRight}>
+          <BrandLogo compact />
           <View style={styles.roleBadge}>
             <Text style={styles.roleText}>{user?.role?.toUpperCase()}</Text>
           </View>

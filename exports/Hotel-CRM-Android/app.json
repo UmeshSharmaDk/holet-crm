@@ -2,7 +2,7 @@
   "expo": {
     "name": "Stay Pilot",
     "slug": "staypilot",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "staypilot",
@@ -19,10 +19,14 @@
     },
     "android": {
       "package": "com.staypilot.app",
-      "versionCode": 1
+      "versionCode": 2,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      }
     },
     "web": {
-      "favicon": "./assets/images/icon.png"
+      "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
       [

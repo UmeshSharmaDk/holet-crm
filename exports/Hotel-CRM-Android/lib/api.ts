@@ -1,6 +1,7 @@
 import { getAuthToken } from "./secureStorage";
 import { getCsrfHeader } from "./csrf";
 import { refreshAfterWrite } from "./query-client";
+import { Platform } from "react-native";
 
 const BASE_URL = process.env.EXPO_PUBLIC_DOMAIN ? `https://${process.env.EXPO_PUBLIC_DOMAIN}` : "";
 
@@ -36,7 +37,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const method = (options.method ?? "GET").toUpperCase();
   const res = await fetch(`${BASE_URL}/api${path}`, {
     ...options,
-    credentials: "include",
+    credentials: Platform.OS === "web" ? "include" : "omit",
     headers: {
       "Content-Type": "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -58,7 +59,7 @@ async function upload<T>(path: string, body: FormData): Promise<T> {
   const res = await fetch(`${BASE_URL}/api${path}`, {
     method: "POST",
     body,
-    credentials: "include",
+    credentials: Platform.OS === "web" ? "include" : "omit",
     headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...await getCsrfHeader() },
   });
   if (!res.ok) {

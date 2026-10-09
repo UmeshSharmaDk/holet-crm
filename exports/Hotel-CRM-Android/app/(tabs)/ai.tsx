@@ -279,7 +279,7 @@ export default function AIScreen() {
           </View>
           <View>
             <Text style={styles.title}>AI Assistant</Text>
-            <Text style={styles.subtitle}>Hindi & English • Hotel CRM</Text>
+            <Text style={styles.subtitle}>Hindi & English • StayPilot</Text>
           </View>
         </View>
         {messages.length > 0 && (

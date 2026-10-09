@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Colors from "@/constants/colors";
 import { useAuth } from "@/context/AuthContext";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
+import { BrandLogo } from "@/components/BrandLogo";
 
 const C = Colors.light;
 
@@ -45,15 +46,12 @@ export default function LoginScreen() {
   return (
     <KeyboardAwareScrollViewCompat
       style={styles.container}
-      contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 60, paddingBottom: insets.bottom + 24 }]}
+      contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 32, paddingBottom: insets.bottom + 24 }]}
       bottomOffset={24}
       showsVerticalScrollIndicator={false}
     >
         <View style={styles.logoArea}>
-          <View style={styles.logoIcon}>
-            <Feather name="home" size={36} color={C.gold} />
-          </View>
-          <Text style={styles.appName}>Hotel CRM</Text>
+          <BrandLogo />
           <Text style={styles.tagline}>Property Management System</Text>
         </View>
 
@@ -123,20 +121,8 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: C.primary },
   scroll: { paddingHorizontal: 24, flexGrow: 1, justifyContent: "center" },
-  logoArea: { alignItems: "center", marginBottom: 36 },
-  logoIcon: {
-    width: 80,
-    height: 80,
-    borderRadius: 24,
-    backgroundColor: C.primary,
-    borderWidth: 2,
-    borderColor: C.gold,
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 16,
-  },
-  appName: { fontFamily: "Inter_700Bold", fontSize: 32, color: "#fff", letterSpacing: -0.5 },
-  tagline: { fontFamily: "Inter_400Regular", fontSize: 14, color: "rgba(255,255,255,0.6)", marginTop: 4 },
+  logoArea: { alignItems: "center", marginBottom: 24 },
+  tagline: { fontFamily: "Inter_400Regular", fontSize: 14, color: "rgba(255,255,255,0.6)", marginTop: 8 },
   card: {
     backgroundColor: "#fff",
     borderRadius: 24,
@@ -172,6 +158,7 @@ const styles = StyleSheet.create({
   inputIcon: { marginLeft: 14 },
   input: {
     flex: 1,
+    minWidth: 0,
     paddingHorizontal: 12,
     paddingVertical: 14,
     fontFamily: "Inter_400Regular",

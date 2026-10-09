@@ -93,8 +93,8 @@ android {
         applicationId 'com.staypilot.app'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0.0"
+        versionCode 2
+        versionName "1.0.1"
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
     }
@@ -109,6 +109,8 @@ android {
             // generated Android signing certificate (not the template key).
             if ((findProperty('internalDistribution') ?: 'false').toBoolean()) {
                 signingConfig signingConfigs.debug
+                def internalKey = findProperty("internalKeystorePath")
+                if (internalKey) signingConfigs.debug.storeFile = file(internalKey)
             }
             def enableShrinkResources = findProperty('android.enableShrinkResourcesInReleaseBuilds') ?: 'false'
             shrinkResources enableShrinkResources.toBoolean()

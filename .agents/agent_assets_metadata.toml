@@ -28,3 +28,17 @@ mtime_ms = 1791551663535
 storage_uri = "gcs://replit-rams-assets-pike/rams/assets/repl:b739e04e-cf1d-4225-9b28-7088760ab149/12f2c48c-8d0f-4310-96af-e884607c5bca/d88b7643-3087-4b57-b67a-4117797885af"
 storage_version_token = "1791551738529878"
 content_type = "application/octet-stream"
+
+[[outputs]]
+id = "UcPyA-_CWmW8FU1mWraEt"
+uri = "file://exports/Stay-Pilot-Internal-v1.0.1-ARM64.apk"
+type = "unspecified"
+title = "StayPilot Android update — v1.0.1"
+description = "Internal Android ARM64 APK with the complete, untrimmed StayPilot logo and adjusted layout. Android 7 or newer. Signed with the same certificate as the previous APK. Backend hosting must be set to Public for phone sign-in."
+logical_id = "0330d01e-42fc-4aeb-bb01-8fcce16f9eb9"
+content_hash = "sha256:bd5dddd42305e2e46712239a6801ad97f4e17b0a54b2a39be7a1abf8a64dc1bf"
+size = 42253760
+mtime_ms = 1791554650839
+storage_uri = "gcs://replit-rams-assets-pike/rams/assets/repl:b739e04e-cf1d-4225-9b28-7088760ab149/0330d01e-42fc-4aeb-bb01-8fcce16f9eb9/c7a92044-fffd-4714-a839-6877ac2386d7"
+storage_version_token = "1791554796372663"
+content_type = "application/octet-stream"

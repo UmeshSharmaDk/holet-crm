@@ -8,3 +8,5 @@
 - [Identity storage](identity-storage.md) — new guest scans need encrypted private persistent storage; preserve legacy photos and fail-safe retry behavior.
 - [Android exports](android-exports.md) — verify standalone dependencies and Android bundling; workspace checks alone do not establish export portability.
 - [Internal distribution](internal-distribution.md) — Android and iPhone are for internal use, not a public App Store release; source ZIPs alone are not installers.
+- [StayPilot branding](staypilot-branding.md) — use the supplied gradient building symbol and wordmark consistently across app branding.
+- [Expo preview timing](expo-preview-timing.md) — early white captures can precede font loading; verify readiness before diagnosing a broken page.

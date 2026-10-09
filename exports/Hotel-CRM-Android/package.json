@@ -8,7 +8,9 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "bundle:android": "expo export --platform android --output-dir android-bundle-check"
+    "bundle:android": "expo export --platform android --output-dir android-bundle-check",
+    "android": "expo run:android",
+    "ios": "expo run:ios"
   },
   "dependencies": {
     "babel-preset-expo": "54.0.12",

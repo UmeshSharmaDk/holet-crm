@@ -10,6 +10,7 @@ import {
   clearCachedUser,
 } from "@/lib/secureStorage";
 import { getCsrfHeader } from "@/lib/csrf";
+import { readLoginJson, verifyNativeLoginService } from "@/lib/login-response";
 
 export type UserRole = "admin" | "owner" | "manager";
 
@@ -77,7 +78,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // role it carries. A rejected token (or, on web, no valid cookie)
       // means the session is over.
       const res = await fetch(`${BASE_URL}/api/auth/me`, {
-        credentials: "include",
+        credentials: Platform.OS === "web" ? "include" : "omit",
         headers: storedToken ? { Authorization: `Bearer ${storedToken}` } : {},
       });
       if (res.status === 401) {
@@ -85,7 +86,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
       if (res.ok) {
-        const fresh: AuthUser = await res.json();
+        const fresh: AuthUser = await readLoginJson(res);
         setUser(fresh);
         await setCachedUser(JSON.stringify(fresh));
       }
@@ -106,17 +107,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function login(email: string, password: string) {
+    if (Platform.OS !== "web") await verifyNativeLoginService(BASE_URL);
     const res = await fetch(`${BASE_URL}/api/auth/login`, {
       method: "POST",
-      credentials: "include",
+      credentials: Platform.OS === "web" ? "include" : "omit",
       headers: { "Content-Type": "application/json", ...await getCsrfHeader() },
       body: JSON.stringify({ email, password }),
     });
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      throw new Error(body?.message ?? "Login failed");
+    const data = await readLoginJson(res);
+    if (!res.ok) throw new Error(data?.message ?? "Login failed");
+    if (!data?.user || typeof data.user.id !== "number" || typeof data.token !== "string" || !data.token) {
+      throw new Error("The CRM server returned an incomplete login response. Please contact the administrator.");
     }
-    const data = await res.json();
     // On web this stores nothing (secureStorage no-ops there) — the session
     // lives entirely in the httpOnly cookie the response just set.
     await setAuthToken(data.token);
