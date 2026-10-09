@@ -6,7 +6,7 @@ import { db, bookingsTable, hotelsTable, agenciesTable } from "@workspace/db";
 import { eq, and, between, sql, desc, count as sqlCount } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth.js";
 import { requireHotelScope, scopeAllows, hotelFilter, type HotelScope } from "../lib/scope.js";
-import { signAction, verifyAction, type PendingAction } from "../lib/actionToken.js";
+import { signAction, consumeAction, type PendingAction } from "../lib/actionToken.js";
 import {
   money,
   count as validCount,
@@ -15,6 +15,7 @@ import {
   optionalText,
   optionalEmail,
   oneOf,
+  toPositiveInteger,
   BOOKING_STATUSES,
   ValidationError,
 } from "../lib/validate.js";
@@ -185,8 +186,7 @@ const functionDeclarations: any[] = [
 /** The hotel a write should target, honouring the caller's scope. */
 function writeTargetHotelId(scope: HotelScope, requested: unknown): number | null {
   if (scope.kind === "hotel") return scope.hotelId;
-  const parsed = Number.parseInt(String(requested), 10);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+  return toPositiveInteger(requested);
 }
 
 /** Exported so the aggregation tools can be checked against the REST endpoints they mirror. */
@@ -212,10 +212,8 @@ export async function executeTool(name: string, args: any, reqUser: any, scope: 
     if (args.guestName) conditions.push(sql`LOWER(${bookingsTable.guestName}) LIKE LOWER(${'%' + String(args.guestName).slice(0, 200) + '%'})`);
 
     // The model controls this value, so it is clamped rather than trusted.
-    const requested = Number.parseInt(String(args.limit ?? 50), 10);
-    const limit = Number.isInteger(requested) && requested > 0
-      ? Math.min(requested, MAX_TOOL_ROWS)
-      : 50;
+    const requested = toPositiveInteger(args.limit ?? 50);
+    const limit = requested !== null ? Math.min(requested, MAX_TOOL_ROWS) : 50;
 
     const rows = conditions.length
       ? await db.select().from(bookingsTable).where(and(...conditions)).orderBy(desc(bookingsTable.checkIn)).limit(limit)
@@ -424,8 +422,8 @@ export async function executeTool(name: string, args: any, reqUser: any, scope: 
   }
 
   if (name === "revenue_summary") {
-    const year = Number.parseInt(String(args.year ?? new Date().getFullYear()), 10);
-    if (!Number.isInteger(year) || year < 1970 || year > 9999) return { error: "year must be a valid year" };
+    const year = toPositiveInteger(args.year ?? new Date().getFullYear());
+    if (year === null || year < 1970 || year > 9999) return { error: "year must be a valid year" };
 
     const yearFilter = sql`EXTRACT(YEAR FROM ${bookingsTable.checkIn}) = ${year}`;
     const where = scopeFilter ? and(yearFilter, scopeFilter) : yearFilter;
@@ -494,28 +492,88 @@ export async function executeTool(name: string, args: any, reqUser: any, scope: 
   return { error: `Unknown tool: ${name}` };
 }
 
+/**
+ * Builds the confirmation response for a proposed write.
+ *
+ * `viaRecordData` distinguishes two very different situations that otherwise
+ * look identical to the person confirming: a write the user's own message
+ * asked for, versus one the model decided to propose only after reading
+ * stored records (bookings, notes, guest names) that a prompt injection
+ * could have planted. The signed-confirmation gate already stops an
+ * injected instruction from executing on its own — this gives the human
+ * confirming it the one piece of context they need to catch it anyway,
+ * instead of trusting the assistant's summary of "what it read" for why.
+ */
+export function buildPendingActionResponse(
+  action: PendingAction,
+  userId: number,
+  viaRecordData: boolean,
+): { reply: string; tainted: boolean; pendingAction: { token: string; description: string; viaRecordData: boolean } } {
+  const description = describeAction(action);
+  const warning = viaRecordData
+    ? "\n\n⚠️ I'm proposing this after reading stored records, not directly from what you asked. " +
+      "Only confirm if this is actually what you want."
+    : "";
+  return {
+    reply: `${description} Please confirm to apply this change.${warning}`,
+    tainted: viaRecordData,
+    pendingAction: {
+      token: signAction(userId, action),
+      description,
+      viaRecordData,
+    },
+  };
+}
+
+/**
+ * Renders a single argument value for the confirmation prompt. The person
+ * confirming needs to see what they're actually approving — a field name
+ * alone ("guestEmail, status") hides exactly the content an injected
+ * instruction would have changed.
+ */
+function formatValue(v: unknown): string {
+  if (v === null || v === undefined || v === "") return "(empty)";
+  const s = typeof v === "number" ? String(v) : String(v);
+  return s.length > 120 ? `${s.slice(0, 120)}…` : s;
+}
+
 /** Human-readable description of a write, shown on the confirmation prompt. */
 function describeAction(action: PendingAction): string {
   const a = action.args as any;
   if (action.name === "create_booking") {
-    return `Create a booking for ${a.guestName ?? "(no name)"} from ${a.checkIn} to ${a.checkOut}, room rent ₹${a.roomRent ?? 0}.`;
+    const extras: string[] = [];
+    if (a.hotelId != null) extras.push(`hotel #${formatValue(a.hotelId)}`);
+    if (a.agencyId != null) extras.push(`agency #${formatValue(a.agencyId)}`);
+    if (a.status) extras.push(`status: ${formatValue(a.status)}`);
+    if (a.guestEmail) extras.push(`email: ${formatValue(a.guestEmail)}`);
+    if (a.guestPhone) extras.push(`phone: ${formatValue(a.guestPhone)}`);
+    if (a.notes) extras.push(`notes: "${formatValue(a.notes)}"`);
+    const extraText = extras.length ? ` [${extras.join(", ")}]` : "";
+    return `Create a booking for ${formatValue(a.guestName)} from ${a.checkIn} to ${a.checkOut}, room rent ₹${a.roomRent ?? 0}${extraText}.`;
   }
   if (action.name === "update_booking") {
     const fields = Object.keys(a).filter((k) => k !== "id");
-    return `Update booking #${a.id} (${fields.join(", ") || "no changes"}).`;
+    if (fields.length === 0) return `Update booking #${a.id} (no changes).`;
+    const changes = fields.map((k) => `${k} → ${formatValue(a[k])}`).join(", ");
+    return `Update booking #${a.id}: ${changes}.`;
   }
   return `Run ${action.name}.`;
 }
 
-function normalizeMessages(raw: unknown): { role: string; content: string }[] {
+/** Exported so the cross-turn taint-seeding behavior can be tested without a live model call. */
+export function normalizeMessages(raw: unknown): { role: string; content: string; tainted: boolean }[] {
   if (!Array.isArray(raw)) return [];
   return raw
     .slice(-MAX_MESSAGES)
-    .filter((m): m is { role: string; content: string } =>
+    .filter((m): m is { role: string; content: string; tainted?: unknown } =>
       !!m && typeof m === "object" && typeof (m as any).content === "string")
     .map((m) => ({
       role: m.role === "assistant" ? "assistant" : "user",
       content: String(m.content).slice(0, MAX_MESSAGE_CHARS),
+      // Client-echoed, so purely advisory (see sawUntrustedData below) — it
+      // can only make a confirmation prompt show an extra warning, never
+      // suppress one the server itself would otherwise add this turn.
+      tainted: m.tainted === true,
     }));
 }
 
@@ -527,9 +585,16 @@ router.post("/chat", requireAuth, aiLimiter, requireHotelScope, async (req, res)
     const messages = normalizeMessages(req.body?.messages);
 
     // A confirmed write runs directly — the model is not consulted about
-    // whether to proceed, only about how to summarise the outcome.
-    const confirmed = verifyAction(req.body?.confirmToken, reqUser.userId);
-    if (confirmed) {
+    // whether to proceed, only about how to summarise the outcome. Consuming
+    // the token (rather than only verifying it) is what stops a retry or a
+    // double-tap from applying the same write twice within its 10-minute TTL.
+    const consumed = await consumeAction(req.body?.confirmToken, reqUser.userId);
+    if (consumed.status === "already_used") {
+      res.json({ reply: "That confirmation was already used, so nothing was changed again. Ask me again if you still want to make this change." });
+      return;
+    }
+    if (consumed.status === "confirmed") {
+      const confirmed = consumed.action;
       let result: any;
       try {
         result = await executeTool(confirmed.name, confirmed.args, reqUser, scope);
@@ -583,6 +648,19 @@ GUIDELINES:
 
     let safety = 0;
     let finalText = "";
+    // True once a round of tool results has been fed back to the model —
+    // i.e. once it has had a chance to read CRM records before proposing
+    // anything, rather than responding to the user's own message alone.
+    //
+    // Each HTTP request only sees its own tool-calling loop, but the chat
+    // itself spans many requests — the client resends the whole history as
+    // plain text each turn. An instruction planted in a record can surface
+    // in one turn's reply and then, resent back on the next turn, look just
+    // like the model's own prior (trusted) output: a write proposed then
+    // would get no warning even though it's still a direct descendant of
+    // that untrusted read. Seeding this from any earlier turn the server
+    // itself marked `tainted` closes that gap.
+    let sawUntrustedData = messages.some((m) => m.role === "assistant" && m.tainted);
     while (safety < MAX_TOOL_TURNS) {
       safety++;
       const response: any = await gemini.models.generateContent({
@@ -609,13 +687,7 @@ GUIDELINES:
       const mutating = functionCalls.find((fc: any) => MUTATING_TOOLS.has(fc.name));
       if (mutating) {
         const action: PendingAction = { name: mutating.name, args: mutating.args || {} };
-        res.json({
-          reply: `${describeAction(action)} Please confirm to apply this change.`,
-          pendingAction: {
-            token: signAction(reqUser.userId, action),
-            description: describeAction(action),
-          },
-        });
+        res.json(buildPendingActionResponse(action, reqUser.userId, sawUntrustedData));
         return;
       }
 
@@ -633,9 +705,10 @@ GUIDELINES:
         });
       }
       contents.push({ role: "user", parts: responseParts });
+      sawUntrustedData = true;
     }
 
-    res.json({ reply: finalText || "Sorry, I couldn't generate a response." });
+    res.json({ reply: finalText || "Sorry, I couldn't generate a response.", tainted: sawUntrustedData });
   } catch (e: any) {
     // Upstream provider errors can carry endpoints, quota and project details.
     console.error("[ai/chat]", e);

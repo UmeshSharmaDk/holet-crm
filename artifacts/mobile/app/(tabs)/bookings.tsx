@@ -3,7 +3,6 @@ import { router, useLocalSearchParams } from "expo-router";
 import React, { useState } from "react";
 import {
   ActivityIndicator,
-  FlatList,
   Modal,
   Platform,
   Pressable,
@@ -18,6 +17,7 @@ import Colors from "@/constants/colors";
 import { useAuth } from "@/context/AuthContext";
 import { HotelPicker, useEffectiveHotelId } from "@/components/HotelPicker";
 import { api } from "@/lib/api";
+import { FlatList } from "@/components/RefreshablePages";
 
 const C = Colors.light;
 

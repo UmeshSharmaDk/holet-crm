@@ -1,8 +1,11 @@
 import express, { type Express, type NextFunction, type Request, type Response } from "express";
 import cors from "cors";
+import cookieParser from "cookie-parser";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import { PostgresRateLimitStore } from "./lib/rateLimitStore.js";
+import { AUTH_COOKIE_NAME } from "./lib/authCookies.js";
+import { csrfTokenMatches } from "./lib/csrf.js";
 import router from "./routes";
 
 const app: Express = express();
@@ -99,9 +102,56 @@ const loginLimiter = rateLimit({
   message: { error: "Too Many Requests", message: "Too many login attempts, please try again later." },
 });
 
+/**
+ * Bounds how many reset emails one client can trigger for one account.
+ *
+ * Unlike login this never has a "failure" to skip — the response is
+ * identical whether or not the address exists — so every request counts
+ * against the budget, or the limiter would do nothing at all.
+ */
+const forgotPasswordLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: Number(process.env["PASSWORD_RESET_RATE_LIMIT_MAX"] ?? 5),
+  standardHeaders: true,
+  legacyHeaders: false,
+  store: new PostgresRateLimitStore("password-reset"),
+  keyGenerator: (req) => {
+    const email = typeof req.body?.email === "string" ? req.body.email.trim().toLowerCase() : "";
+    return `${clientKey(req.ip ?? "unknown")}|${email}`;
+  },
+  message: { error: "Too Many Requests", message: "Too many password reset requests, please try again later." },
+});
+
 // Applies to every route, including the root health check, so no path is
 // reachable at unbounded rate.
 app.use(limiter);
+
+app.use(cookieParser());
+
+const MUTATING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+
+/**
+ * Enforces the double-submit CSRF check for exactly the requests that need
+ * it: a mutating request whose only credential is the ambient auth cookie.
+ * A request that also carries an Authorization header proved itself in a
+ * way no cross-site page can replicate — a browser never attaches a custom
+ * header ambiently — so it is never subject to this.
+ */
+function requireCsrfForCookieSessions(req: Request, res: Response, next: NextFunction) {
+  const hasAuthCookie = Boolean(req.cookies?.[AUTH_COOKIE_NAME]);
+  const hasAuthHeader = req.headers.authorization?.startsWith("Bearer ") ?? false;
+  if (!MUTATING_METHODS.has(req.method) || !hasAuthCookie || hasAuthHeader) {
+    next();
+    return;
+  }
+  if (!csrfTokenMatches(req)) {
+    res.status(403).json({ error: "Forbidden", message: "Missing or invalid CSRF token" });
+    return;
+  }
+  next();
+}
+
+app.use(requireCsrfForCookieSessions);
 
 app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: true, limit: "1mb" }));
@@ -111,6 +161,7 @@ app.get("/", (_req, res) => {
 });
 
 app.use("/api/auth/login", loginLimiter);
+app.use("/api/auth/forgot-password", forgotPasswordLimiter);
 app.use("/api", router);
 
 // Unrouted paths get a JSON 404 rather than Express's default HTML page.

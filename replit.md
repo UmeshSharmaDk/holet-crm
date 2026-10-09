@@ -10,7 +10,7 @@ Cross-platform Mobile Hotel CRM built with Expo React Native (web + iOS + Androi
 - **Node.js version**: 24
 - **Package manager**: pnpm
 - **TypeScript version**: 5.9
-- **Mobile**: Expo SDK 53, Expo Router v6 (file-based routing)
+- **Mobile**: Expo SDK 54, Expo Router v6 (file-based routing)
 - **API framework**: Express 5 + JWT auth
 - **Database**: PostgreSQL + Drizzle ORM
 - **Validation**: Zod (`zod/v4`), `drizzle-zod`

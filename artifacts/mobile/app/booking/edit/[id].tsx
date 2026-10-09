@@ -117,7 +117,7 @@ export default function EditBookingScreen() {
       });
       setGuestDetails(bookingGuestsFromBooking(booking.numberOfPersons ?? 1, booking.guests));
     }
-  }, [booking]);
+  }, [booking?.id]);
 
   const mutation = useMutation({
     mutationFn: (data: any) => api.put(`/bookings/${id}`, data),

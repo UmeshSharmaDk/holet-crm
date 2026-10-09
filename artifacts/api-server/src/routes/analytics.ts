@@ -3,6 +3,7 @@ import { db, bookingsTable, hotelsTable, agenciesTable } from "@workspace/db";
 import { eq, and, sql } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth.js";
 import { requireHotelScope, hotelFilter, type HotelScope } from "../lib/scope.js";
+import { toPositiveInteger } from "../lib/validate.js";
 
 const router = Router();
 
@@ -13,9 +14,9 @@ router.get("/occupancy", requireAuth, requireHotelScope, async (req, res) => {
     const effectiveHotelId = scope.kind === "hotel" ? scope.hotelId : undefined;
 
     const now = new Date();
-    const m = month ? parseInt(month as string, 10) : now.getMonth() + 1;
-    const y = year ? parseInt(year as string, 10) : now.getFullYear();
-    if (!Number.isInteger(m) || m < 1 || m > 12 || !Number.isInteger(y) || y < 1970 || y > 9999) {
+    const m = month !== undefined ? toPositiveInteger(month) : now.getMonth() + 1;
+    const y = year !== undefined ? toPositiveInteger(year) : now.getFullYear();
+    if (m === null || m < 1 || m > 12 || y === null || y < 1970 || y > 9999) {
       res.status(400).json({ error: "Bad Request", message: "month must be 1-12 and year must be a valid year" });
       return;
     }
@@ -85,8 +86,8 @@ router.get("/revenue", requireAuth, requireHotelScope, async (req, res) => {
     const { year } = req.query;
     const scope = req.hotelScope as HotelScope;
 
-    const y = year ? parseInt(year as string, 10) : new Date().getFullYear();
-    if (!Number.isInteger(y) || y < 1970 || y > 9999) {
+    const y = year !== undefined ? toPositiveInteger(year) : new Date().getFullYear();
+    if (y === null || y < 1970 || y > 9999) {
       res.status(400).json({ error: "Bad Request", message: "year must be a valid year" });
       return;
     }

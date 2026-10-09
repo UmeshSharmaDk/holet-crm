@@ -27,6 +27,7 @@ import type {
   DeleteHotelConflict,
   DeleteHotelRequest,
   ErrorResponse,
+  GetCsrfToken200,
   GetDashboardForecastParams,
   GetDashboardStatsParams,
   GetOccupancyStatsParams,
@@ -216,6 +217,81 @@ export const useLogin = <
 > => {
   return useMutation(getLoginMutationOptions(options));
 };
+
+/**
+ * @summary Read the session CSRF token for an allowed web origin
+ */
+export const getGetCsrfTokenUrl = () => {
+  return `/api/auth/csrf`;
+};
+
+export const getCsrfToken = async (
+  options?: RequestInit,
+): Promise<GetCsrfToken200> => {
+  return customFetch<GetCsrfToken200>(getGetCsrfTokenUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetCsrfTokenQueryKey = () => {
+  return [`/api/auth/csrf`] as const;
+};
+
+export const getGetCsrfTokenQueryOptions = <
+  TData = Awaited<ReturnType<typeof getCsrfToken>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getCsrfToken>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetCsrfTokenQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getCsrfToken>>> = ({
+    signal,
+  }) => getCsrfToken({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getCsrfToken>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetCsrfTokenQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getCsrfToken>>
+>;
+export type GetCsrfTokenQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Read the session CSRF token for an allowed web origin
+ */
+
+export function useGetCsrfToken<
+  TData = Awaited<ReturnType<typeof getCsrfToken>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getCsrfToken>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetCsrfTokenQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary Get current user info

@@ -22,6 +22,7 @@ export * from "./deleteHotelConflict";
 export * from "./deleteHotelConflictImpact";
 export * from "./deleteHotelRequest";
 export * from "./errorResponse";
+export * from "./getCsrfToken200";
 export * from "./getDashboardForecastParams";
 export * from "./getDashboardStatsParams";
 export * from "./getOccupancyStatsParams";

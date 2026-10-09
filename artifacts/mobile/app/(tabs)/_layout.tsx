@@ -5,11 +5,13 @@ import React from "react";
 import { Platform, StyleSheet, View, useColorScheme } from "react-native";
 import Colors from "@/constants/colors";
 import { useAuth } from "@/context/AuthContext";
+import { useTabSwipeNavigation } from "@/components/AppGestureLayer";
 
 const C = Colors.light;
 
 export default function TabLayout() {
   const { user } = useAuth();
+  const registerTabNavigator = useTabSwipeNavigation();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === "dark";
   const isIOS = Platform.OS === "ios";
@@ -17,6 +19,10 @@ export default function TabLayout() {
 
   return (
     <Tabs
+      screenListeners={({ navigation }) => {
+        registerTabNavigator((name) => navigation.navigate(name as never));
+        return {};
+      }}
       screenOptions={{
         tabBarActiveTintColor: C.accent,
         tabBarInactiveTintColor: C.tabIconDefault,

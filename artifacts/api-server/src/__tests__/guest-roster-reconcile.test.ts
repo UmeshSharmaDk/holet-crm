@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { db, bookingGuestsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { api, login, seedFixtures, startServer, stopServer, type Fixtures } from "./helpers/index.js";
+import { readIdImage } from "../lib/idFileStore.js";
 
 const JPEG: Uint8Array<ArrayBuffer> = new Uint8Array(new ArrayBuffer(8));
 JPEG.set([0xff, 0xd8, 0xff, 0xe0]);
@@ -80,7 +81,9 @@ describe("guest roster follows the party size", () => {
 
   it("destroys the ID scans held for removed guests", async () => {
     const before = await storedGuests();
-    assert.ok(before.every((g) => g.frontIdData), "precondition: every guest has a scan");
+    assert.ok(before.every((g) => g.frontIdKey), "precondition: every guest has a scan");
+    const removedKeys = before.filter((g) => g.personIndex >= 1).map((g) => g.frontIdKey!);
+    assert.equal(removedKeys.length, 3, "precondition: three guests should be removed");
 
     await api(`/api/bookings/${f.bookingA}`, {
       token: ownerA, method: "PUT", body: { numberOfPersons: 1 },
@@ -89,8 +92,15 @@ describe("guest roster follows the party size", () => {
     const remaining = await storedGuests();
     assert.equal(remaining.length, 1);
     // The point of the trim: no identity document survives for someone the
-    // booking no longer records.
+    // booking no longer records — checked against the file store itself,
+    // not just the row, since the bytes no longer live in that row at all.
     assert.equal(remaining[0]!.personIndex, 0);
+    for (const key of removedKeys) {
+      await assert.rejects(
+        readIdImage(key),
+        `a removed guest's ID scan (key ${key}) was still readable from disk`,
+      );
+    }
   });
 
   it("leaves the roster alone when the party grows", async () => {

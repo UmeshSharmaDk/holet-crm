@@ -24,11 +24,12 @@
       [
         "expo-router",
         {
-          "origin": "https://replit.com/"
+          "origin": "https://crm.outhillsmanali.com/"
         }
       ],
       "expo-font",
-      "expo-web-browser"
+      "expo-web-browser",
+      "@react-native-community/datetimepicker"
     ],
     "experiments": {
       "typedRoutes": true,

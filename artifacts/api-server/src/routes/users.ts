@@ -4,11 +4,13 @@ import { db, usersTable, hotelsTable } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
 import { requireAuth, requireAdmin } from "../middlewares/auth.js";
 import { recordAudit } from "../lib/audit.js";
+import { isUniqueViolation } from "../lib/dbErrors.js";
 import {
   parseIdParam,
   parseOptionalId,
   text,
   email as validEmail,
+  password,
   oneOf,
   USER_ROLES,
   ValidationError,
@@ -16,19 +18,6 @@ import {
 } from "../lib/validate.js";
 
 const router = Router();
-
-const MIN_PASSWORD_LENGTH = 10;
-
-function password(raw: unknown): string {
-  const value = String(raw ?? "");
-  if (value.length < MIN_PASSWORD_LENGTH) {
-    throw new ValidationError(`password must be at least ${MIN_PASSWORD_LENGTH} characters`);
-  }
-  if (value.length > 200) {
-    throw new ValidationError("password must be at most 200 characters");
-  }
-  return value;
-}
 
 // Users joined to their hotel in one query rather than one lookup per user.
 function userQuery() {
@@ -91,7 +80,7 @@ router.post("/", requireAuth, requireAdmin, async (req, res) => {
     res.status(201).json(user);
   } catch (error: any) {
     if (handleValidationError(res, error)) return;
-    if (error?.code === "23505") {
+    if (isUniqueViolation(error)) {
       res.status(409).json({ error: "Conflict", message: "Email already in use" });
       return;
     }
@@ -178,7 +167,7 @@ router.put("/:id", requireAuth, requireAdmin, async (req, res) => {
     res.json(user);
   } catch (error: any) {
     if (handleValidationError(res, error)) return;
-    if (error?.code === "23505") {
+    if (isUniqueViolation(error)) {
       res.status(409).json({ error: "Conflict", message: "Email already in use" });
       return;
     }

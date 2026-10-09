@@ -11,14 +11,12 @@
   },
   "private": true,
   "devDependencies": {
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
     "typescript": "~5.9.2",
     "prettier": "^3.8.1"
   },
   "pnpm": {
-    "overrides": {
-      "@types/react": "^18.2.77",
-      "@types/react-dom": "^18.2.25"
-    },
     "onlyBuiltDependencies": []
   }
 }

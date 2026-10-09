@@ -1,6 +1,9 @@
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { db, bookingGuestsTable } from "@workspace/db";
+import { eq } from "drizzle-orm";
 import { api, login, seedFixtures, startServer, stopServer, type Fixtures } from "./helpers/index.js";
+import { readIdImage } from "../lib/idFileStore.js";
 
 /** Smallest bytes that look like a JPEG; content is never parsed, only stored. */
 const JPEG_BYTES: Uint8Array<ArrayBuffer> = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]);
@@ -161,6 +164,64 @@ describe("guest identity documents", () => {
     it("rejects an unknown ID side", async () => {
       const res = await api(`/api/bookings/${f.bookingA}/guests/1/id/sideways`, { token: ownerA });
       assert.equal(res.status, 400);
+    });
+  });
+
+  describe("where the bytes actually live", () => {
+    it("stores the scan encrypted on disk, not in the row, and can read it back", async () => {
+      const guestId = await seedRoster();
+      const [guest] = await db.select().from(bookingGuestsTable).where(eq(bookingGuestsTable.id, guestId));
+      assert.ok(guest!.frontIdKey, "the row should keep a key, not the bytes");
+      assert.ok(guest!.frontIdChecksum);
+      assert.equal(guest!.frontIdSize, JPEG_BYTES.length);
+
+      const decrypted = await readIdImage(guest!.frontIdKey!);
+      assert.deepEqual(new Uint8Array(decrypted), JPEG_BYTES);
+
+      const res = await api(`/api/bookings/${f.bookingA}/guests/${guestId}/id/front`, { token: ownerA });
+      assert.equal(res.status, 200);
+    });
+
+    it("deletes the old file when a new upload replaces it", async () => {
+      const guestId = await seedRoster();
+      const [before] = await db.select().from(bookingGuestsTable).where(eq(bookingGuestsTable.id, guestId));
+      const oldKey = before!.frontIdKey!;
+
+      const replaced = await api(`/api/bookings/${f.bookingA}/guests`, {
+        token: ownerA, method: "POST",
+        formData: guestForm(
+          [{ personIndex: 1, name: "Alice Confidential", relation: "self" }],
+          { name: "new-photo.jpg", type: "image/jpeg", body: new Uint8Array([0xff, 0xd8, 0xff, 0xe1]) },
+        ),
+      });
+      assert.equal(replaced.status, 201);
+
+      await assert.rejects(readIdImage(oldKey), "the superseded scan was still readable from disk");
+    });
+
+    it("deletes the file when the booking is deleted", async () => {
+      const created = await api(`/api/bookings`, {
+        token: ownerA, method: "POST",
+        body: { guestName: "Solo Traveller", checkIn: "2099-05-01", checkOut: "2099-05-02", roomRent: 1000, addOns: 0 },
+      });
+      assert.equal(created.status, 201, JSON.stringify(created.data));
+      const bookingId = created.data.id as number;
+
+      const saved = await api(`/api/bookings/${bookingId}/guests`, {
+        token: ownerA, method: "POST",
+        formData: guestForm(
+          [{ personIndex: 1, name: "Solo Traveller", relation: "self" }],
+          { name: "id.jpg", type: "image/jpeg", body: JPEG_BYTES },
+        ),
+      });
+      assert.equal(saved.status, 201);
+      const [guest] = await db.select().from(bookingGuestsTable).where(eq(bookingGuestsTable.bookingId, bookingId));
+      const key = guest!.frontIdKey!;
+
+      const deleted = await api(`/api/bookings/${bookingId}`, { token: ownerA, method: "DELETE" });
+      assert.equal(deleted.status, 204);
+
+      await assert.rejects(readIdImage(key), "a deleted booking's guest ID scan was still readable from disk");
     });
   });
 });

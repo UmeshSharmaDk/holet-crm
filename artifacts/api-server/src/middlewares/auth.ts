@@ -2,11 +2,18 @@ import { Request, Response, NextFunction } from "express";
 import { db, usersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { verifyToken, JWTPayload } from "../lib/jwt.js";
+import { AUTH_COOKIE_NAME } from "../lib/authCookies.js";
 
 declare global {
   namespace Express {
     interface Request {
       user?: JWTPayload;
+      /**
+       * Which credential this request authenticated with. The CSRF
+       * middleware only cares about "cookie" — a Bearer header is never
+       * attached ambiently by a browser, so it cannot be forged cross-site.
+       */
+      authSource?: "header" | "cookie";
     }
   }
 }
@@ -20,15 +27,26 @@ declare global {
  * hotel, or deleting them takes effect immediately instead of lingering until
  * their token expires. A tokenVersion mismatch (bumped on password change)
  * rejects tokens issued before the change.
+ *
+ * Accepts the token from the Authorization header (native, and the web
+ * client's own generated API calls where a header is used) or from the
+ * httpOnly auth cookie (the browser's session). The header is checked first
+ * so a request that carries one is never treated as cookie-ambient.
  */
 export async function requireAuth(req: Request, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization;
-  if (!authHeader?.startsWith("Bearer ")) {
+  let token: string;
+  if (authHeader?.startsWith("Bearer ")) {
+    token = authHeader.slice(7);
+    req.authSource = "header";
+  } else if (typeof req.cookies?.[AUTH_COOKIE_NAME] === "string" && req.cookies[AUTH_COOKIE_NAME]) {
+    token = req.cookies[AUTH_COOKIE_NAME];
+    req.authSource = "cookie";
+  } else {
     res.status(401).json({ error: "Unauthorized", message: "No token provided" });
     return;
   }
 
-  const token = authHeader.slice(7);
   let payload: JWTPayload;
   try {
     payload = verifyToken(token);

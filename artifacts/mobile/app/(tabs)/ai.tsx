@@ -6,7 +6,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
-  ScrollView,
+  ScrollView as NativeScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -16,6 +16,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Colors from "@/constants/colors";
 import { useAuth } from "@/context/AuthContext";
 import { getAuthToken } from "@/lib/secureStorage";
+import { getCsrfHeader } from "@/lib/csrf";
+import { ScrollView } from "@/components/RefreshablePages";
+import { queryClient } from "@/lib/query-client";
 
 const C = Colors.light;
 const BASE_URL = process.env.EXPO_PUBLIC_DOMAIN ? `https://${process.env.EXPO_PUBLIC_DOMAIN}` : "";
@@ -24,6 +27,12 @@ interface ChatMsg {
   role: "user" | "assistant";
   content: string;
   id: string;
+  // Set when the server generated this reply after reading CRM record data
+  // (not just the user's own message). Echoed back in the resent history so
+  // a write proposed on a *later* turn still gets flagged as a possible
+  // second-order prompt injection, even though that later turn's own tool
+  // loop never itself read anything untrusted.
+  tainted?: boolean;
 }
 
 interface PendingAction {
@@ -54,7 +63,7 @@ export default function AIScreen() {
   // A write the assistant proposed. It is only applied when the user confirms,
   // so text hidden inside a CRM record cannot drive a change on its own.
   const [pending, setPending] = useState<PendingAction | null>(null);
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<NativeScrollView>(null);
   const soundRef = useRef<Audio.Sound | null>(null);
   const webRecorderRef = useRef<MediaRecorder | null>(null);
   const webChunksRef = useRef<Blob[]>([]);
@@ -69,9 +78,14 @@ export default function AIScreen() {
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50);
   }, [messages, loading]);
 
+  /**
+   * Every call these headers go on is a POST, so the CSRF header always
+   * applies too — on web it rides the cookie session, and the CSRF cookie
+   * that goes with it, rather than a Bearer token.
+   */
   async function authHeaders(): Promise<Record<string, string>> {
     const token = await getAuthToken();
-    return token ? { Authorization: `Bearer ${token}` } : {};
+    return { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...await getCsrfHeader() };
   }
 
   async function send(text: string) {
@@ -87,14 +101,15 @@ export default function AIScreen() {
       const headers = await authHeaders();
       const res = await fetch(`${BASE_URL}/api/ai/chat`, {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json", ...headers },
         body: JSON.stringify({
-          messages: next.map((m) => ({ role: m.role, content: m.content })),
+          messages: next.map((m) => ({ role: m.role, content: m.content, tainted: m.tainted })),
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.message ?? "AI error");
-      setMessages((prev) => [...prev, { role: "assistant", content: data.reply, id: String(Date.now() + 1) }]);
+      setMessages((prev) => [...prev, { role: "assistant", content: data.reply, id: String(Date.now() + 1), tainted: !!data.tainted }]);
       if (data.pendingAction?.token) setPending(data.pendingAction);
     } catch (e: any) {
       setMessages((prev) => [...prev, { role: "assistant", content: `⚠️ ${e?.message ?? "Failed"}`, id: String(Date.now() + 1) }]);
@@ -112,12 +127,17 @@ export default function AIScreen() {
       const headers = await authHeaders();
       const res = await fetch(`${BASE_URL}/api/ai/chat`, {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json", ...headers },
         body: JSON.stringify({ confirmToken: action.token }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.message ?? "AI error");
-      setMessages((prev) => [...prev, { role: "assistant", content: data.reply, id: String(Date.now() + 1) }]);
+      // Confirmed AI actions can change several resource types, so refresh all
+      // mounted data and mark the other pages stale without failing the save.
+      await queryClient.invalidateQueries({ refetchType: "active" })
+        .catch((error) => console.error("Related data refresh failed:", error));
+      setMessages((prev) => [...prev, { role: "assistant", content: data.reply, id: String(Date.now() + 1), tainted: !!data.tainted }]);
     } catch (e: any) {
       setMessages((prev) => [...prev, { role: "assistant", content: `⚠️ ${e?.message ?? "Failed"}`, id: String(Date.now() + 1) }]);
     } finally {
@@ -179,7 +199,12 @@ export default function AIScreen() {
         formData.append("audio", { uri, name: `audio.${ext}`, type: `audio/${ext === "m4a" ? "mp4" : ext}` } as any);
       }
       const headers = await authHeaders();
-      const res = await fetch(`${BASE_URL}/api/ai/stt`, { method: "POST", headers, body: formData });
+      const res = await fetch(`${BASE_URL}/api/ai/stt`, {
+        method: "POST",
+        credentials: "include",
+        headers,
+        body: formData,
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.message ?? "STT failed");
       if (data.text?.trim()) {
@@ -212,6 +237,7 @@ export default function AIScreen() {
       const headers = await authHeaders();
       const res = await fetch(`${BASE_URL}/api/ai/tts`, {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json", ...headers },
         body: JSON.stringify({ text: msg.content }),
       });

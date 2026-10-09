@@ -4,6 +4,7 @@ import { eq, and, count as sqlCount, sql } from "drizzle-orm";
 import { requireAuth, requireAdmin } from "../middlewares/auth.js";
 import { recordAudit } from "../lib/audit.js";
 import { parseIdParam, text, count, handleValidationError } from "../lib/validate.js";
+import { deleteIdImages } from "../lib/idFileStore.js";
 
 const router = Router();
 
@@ -119,7 +120,7 @@ async function deletionImpact(hotelId: number) {
     .innerJoin(bookingsTable, eq(bookingGuestsTable.bookingId, bookingsTable.id))
     .where(and(
       eq(bookingsTable.hotelId, hotelId),
-      sql`(${bookingGuestsTable.frontIdData} IS NOT NULL OR ${bookingGuestsTable.backIdData} IS NOT NULL)`,
+      sql`(${bookingGuestsTable.frontIdKey} IS NOT NULL OR ${bookingGuestsTable.backIdKey} IS NOT NULL)`,
     ));
 
   return {
@@ -162,7 +163,22 @@ router.delete("/:id", requireAuth, requireAdmin, async (req, res) => {
       return;
     }
 
+    // bookings and booking_guests cascade from hotels in the database, but
+    // the ID scan files those guest rows point at live outside Postgres —
+    // their keys have to be captured before the cascade removes the rows
+    // that name them.
+    const guestFileKeys = (await db
+      .select({ frontIdKey: bookingGuestsTable.frontIdKey, backIdKey: bookingGuestsTable.backIdKey })
+      .from(bookingGuestsTable)
+      .innerJoin(bookingsTable, eq(bookingGuestsTable.bookingId, bookingsTable.id))
+      .where(eq(bookingsTable.hotelId, hotelId)))
+      .flatMap((g) => [g.frontIdKey, g.backIdKey])
+      .filter((k): k is string => !!k);
+
     await db.delete(hotelsTable).where(eq(hotelsTable.id, hotelId));
+    if (guestFileKeys.length > 0) {
+      await deleteIdImages(guestFileKeys);
+    }
     await recordAudit(req, {
       action: "hotel.delete",
       targetType: "hotel",

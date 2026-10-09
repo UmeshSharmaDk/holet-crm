@@ -20,7 +20,7 @@ import { Response } from "express";
  */
 const POSITIVE_INTEGER = /^[0-9]+$/;
 
-function toPositiveInteger(raw: unknown): number | null {
+export function toPositiveInteger(raw: unknown): number | null {
   if (typeof raw === "number") {
     return Number.isSafeInteger(raw) && raw > 0 ? raw : null;
   }
@@ -28,6 +28,20 @@ function toPositiveInteger(raw: unknown): number | null {
   if (!POSITIVE_INTEGER.test(text)) return null;
   const value = Number(text);
   return Number.isSafeInteger(value) && value > 0 ? value : null;
+}
+
+const DECIMAL_NUMBER = /^-?[0-9]+(\.[0-9]+)?$/;
+
+/**
+ * Parses a string as a plain decimal number, rejecting anything `parseFloat`
+ * or `parseInt` would otherwise read a leading numeric prefix from and
+ * silently accept the rest of — `"3xyz"`, `"1,000"`, `"1e9"`.
+ */
+function toStrictNumber(raw: unknown): number | null {
+  if (typeof raw === "number") return raw;
+  const text = String(raw ?? "").trim();
+  if (!DECIMAL_NUMBER.test(text)) return null;
+  return Number(text);
 }
 
 /** Parses a positive integer route param; replies 400 and returns null if invalid. */
@@ -59,8 +73,8 @@ export function money(raw: unknown, field: string, fallback?: number): number {
     if (fallback !== undefined) return fallback;
     throw new ValidationError(`${field} is required`);
   }
-  const value = typeof raw === "number" ? raw : Number.parseFloat(String(raw));
-  if (!Number.isFinite(value)) {
+  const value = toStrictNumber(raw);
+  if (value === null || !Number.isFinite(value)) {
     throw new ValidationError(`${field} must be a number`);
   }
   if (value < 0) {
@@ -75,8 +89,8 @@ export function money(raw: unknown, field: string, fallback?: number): number {
 /** Coerces a positive integer count (rooms, persons). */
 export function count(raw: unknown, field: string, fallback: number): number {
   if (raw === undefined || raw === null || raw === "") return fallback;
-  const value = typeof raw === "number" ? raw : Number.parseInt(String(raw), 10);
-  if (!Number.isInteger(value) || value < 1 || value > 10_000) {
+  const value = toStrictNumber(raw);
+  if (value === null || !Number.isInteger(value) || value < 1 || value > 10_000) {
     throw new ValidationError(`${field} must be a whole number between 1 and 10000`);
   }
   return value;
@@ -138,6 +152,20 @@ export function email(raw: unknown, field = "email"): string {
 export function optionalEmail(raw: unknown, field: string): string | null {
   if (raw === undefined || raw === null || String(raw).trim() === "") return null;
   return email(raw, field);
+}
+
+export const MIN_PASSWORD_LENGTH = 10;
+
+/** Shared by admin-driven and self-service password changes. */
+export function password(raw: unknown, field = "password"): string {
+  const value = String(raw ?? "");
+  if (value.length < MIN_PASSWORD_LENGTH) {
+    throw new ValidationError(`${field} must be at least ${MIN_PASSWORD_LENGTH} characters`);
+  }
+  if (value.length > 200) {
+    throw new ValidationError(`${field} must be at most 200 characters`);
+  }
+  return value;
 }
 
 /** Replies 400 for a ValidationError, otherwise re-throws. */

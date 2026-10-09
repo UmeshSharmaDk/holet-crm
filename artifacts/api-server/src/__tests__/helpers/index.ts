@@ -114,11 +114,21 @@ export interface ApiResponse<T = any> {
 
 export async function api<T = any>(
   path: string,
-  options: { token?: string; method?: string; body?: unknown; formData?: FormData } = {},
+  options: {
+    token?: string;
+    method?: string;
+    body?: unknown;
+    formData?: FormData;
+    /** Raw Cookie header value, for exercising cookie-based auth directly. */
+    cookie?: string;
+    /** Extra headers, e.g. X-CSRF-Token, without overloading every other option. */
+    headers?: Record<string, string>;
+  } = {},
 ): Promise<ApiResponse<T>> {
-  const { token, method = "GET", body, formData } = options;
-  const headers: Record<string, string> = {};
+  const { token, method = "GET", body, formData, cookie, headers: extraHeaders } = options;
+  const headers: Record<string, string> = { ...extraHeaders };
   if (token) headers["Authorization"] = `Bearer ${token}`;
+  if (cookie) headers["Cookie"] = cookie;
   if (body !== undefined) headers["Content-Type"] = "application/json";
 
   const res = await fetch(`${baseUrl}${path}`, {
@@ -131,6 +141,27 @@ export async function api<T = any>(
   let data: any = null;
   try { data = text ? JSON.parse(text) : null; } catch { data = text; }
   return { status: res.status, data, headers: res.headers };
+}
+
+/**
+ * Set-Cookie values from a response, tolerant of undici's split history:
+ * getSetCookie() returns each cookie separately where available, and a
+ * single fetch always has at most one Set-Cookie visible via .get() otherwise.
+ */
+function getSetCookieValues(res: ApiResponse): string[] {
+  const headers = res.headers as Headers & { getSetCookie?: () => string[] };
+  if (typeof headers.getSetCookie === "function") return headers.getSetCookie();
+  const single = res.headers.get("set-cookie");
+  return single ? [single] : [];
+}
+
+/** Pulls one cookie's value out of a response's Set-Cookie headers, ignoring its attributes. */
+export function extractCookieValue(res: ApiResponse, name: string): string | undefined {
+  for (const line of getSetCookieValues(res)) {
+    const match = line.match(new RegExp(`^${name}=([^;]*)`));
+    if (match) return decodeURIComponent(match[1]);
+  }
+  return undefined;
 }
 
 export async function login(email: string, password: string = PASSWORD): Promise<string> {

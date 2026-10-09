@@ -43,6 +43,13 @@ export const LoginResponse = zod.object({
 });
 
 /**
+ * @summary Read the session CSRF token for an allowed web origin
+ */
+export const GetCsrfTokenResponse = zod.object({
+  csrfToken: zod.string().nullable(),
+});
+
+/**
  * @summary Get current user info
  */
 export const GetMeResponse = zod.object({

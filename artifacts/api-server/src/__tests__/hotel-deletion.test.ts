@@ -1,8 +1,9 @@
 import { after, before, beforeEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { db, hotelsTable, bookingsTable } from "@workspace/db";
+import { db, hotelsTable, bookingsTable, bookingGuestsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { api, login, seedFixtures, startServer, stopServer, type Fixtures } from "./helpers/index.js";
+import { readIdImage } from "../lib/idFileStore.js";
 
 const JPEG: Uint8Array<ArrayBuffer> = new Uint8Array(new ArrayBuffer(8));
 JPEG.set([0xff, 0xd8, 0xff, 0xe0]);
@@ -67,7 +68,18 @@ describe("hotel deletion", () => {
     assert.ok(stillThere);
   });
 
-  it("proceeds when the name is confirmed exactly", async () => {
+  it("proceeds when the name is confirmed exactly, and takes the ID scan files with it", async () => {
+    const form = new FormData();
+    form.append("guests", JSON.stringify([{ personIndex: 1, name: "Alice", relation: "self" }]));
+    form.append("front_0", new Blob([JPEG], { type: "image/jpeg" }), "id.jpg");
+    const saved = await api(`/api/bookings/${f.bookingA}/guests`, {
+      token: ownerA, method: "POST", formData: form,
+    });
+    assert.equal(saved.status, 201, "roster setup failed");
+    const [guest] = await db.select().from(bookingGuestsTable).where(eq(bookingGuestsTable.bookingId, f.bookingA));
+    const scanKey = guest!.frontIdKey!;
+    assert.ok(scanKey, "precondition: the guest has a stored scan");
+
     const res = await api(`/api/hotels/${f.hotelA}`, {
       token: admin, method: "DELETE", body: { confirm: "Hotel A" },
     });
@@ -80,6 +92,13 @@ describe("hotel deletion", () => {
     // about changing what deletion means.
     const orphaned = await db.select().from(bookingsTable).where(eq(bookingsTable.hotelId, f.hotelA));
     assert.equal(orphaned.length, 0);
+
+    // The cascade only ever covered the database rows; the file the deleted
+    // row pointed at lives outside Postgres and needs its own cleanup.
+    await assert.rejects(
+      readIdImage(scanKey),
+      "a deleted hotel's guest ID scan was still readable from disk",
+    );
   });
 
   it("deletes an empty hotel without ceremony", async () => {

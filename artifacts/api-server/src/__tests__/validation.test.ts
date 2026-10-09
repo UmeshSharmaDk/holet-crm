@@ -115,6 +115,30 @@ describe("request validation", () => {
     });
   });
 
+  describe("query-string numeric filters", () => {
+    // parseInt stops at the first unparseable character rather than failing,
+    // so each of these used to silently resolve to a different value
+    // ("5xyz" -> 5) instead of being rejected.
+    for (const path of [
+      "/api/bookings?agencyId=5xyz",
+      "/api/bookings?month=5xyz&year=2026",
+      "/api/bookings?month=5&year=2026xyz",
+      "/api/analytics/occupancy?month=5xyz",
+      "/api/analytics/occupancy?year=2026xyz",
+      "/api/analytics/revenue?year=2026xyz",
+    ]) {
+      it(`rejects ${path} with 400 rather than silently truncating`, async () => {
+        const res = await api(path, { token: managerB });
+        assert.equal(res.status, 400, `got ${res.status}: ${JSON.stringify(res.data)}`);
+      });
+    }
+
+    it("still accepts well-formed month/year filters", async () => {
+      const res = await api("/api/analytics/occupancy?month=5&year=2026", { token: managerB });
+      assert.equal(res.status, 200);
+    });
+  });
+
   describe("error shape", () => {
     it("returns JSON for an unrouted path", async () => {
       const res = await api(`/definitely/not/a/route`);
