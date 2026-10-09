@@ -7,7 +7,6 @@ import {
   Pressable,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
 import Colors from "@/constants/colors";
@@ -76,12 +75,30 @@ export function DatePickerField({ label, value, onChange, minimumDate, maximumDa
         <Text style={styles.label}>{label}</Text>
         <View style={styles.webInputWrap}>
           <Feather name="calendar" size={16} color={C.textSecondary} style={styles.calIcon} />
-          <TextInput
-            style={styles.webInput}
+          <input
+            type="date"
+            aria-label={label}
+            data-testid="date-picker-input"
             value={value}
-            onChangeText={onChange}
-            placeholder="YYYY-MM-DD"
-            placeholderTextColor={C.textSecondary}
+            min={minimumDate ? toStr(minimumDate) : undefined}
+            max={maximumDate ? toStr(maximumDate) : undefined}
+            onChange={(event) => {
+              // Browser calendars enforce the bounds, and this also prevents
+              // manually typed out-of-range dates from entering form state.
+              if (event.currentTarget.validity.valid) onChange(event.currentTarget.value);
+            }}
+            style={{
+              flex: 1,
+              minWidth: 0,
+              width: "100%",
+              padding: "14px 0",
+              border: "none",
+              backgroundColor: "transparent",
+              fontFamily: "Inter_500Medium, sans-serif",
+              fontSize: 16,
+              color: C.text,
+              colorScheme: "light",
+            }}
           />
         </View>
       </View>
@@ -94,6 +111,10 @@ export function DatePickerField({ label, value, onChange, minimumDate, maximumDa
       <Pressable
         style={({ pressed }) => [styles.btn, pressed && { opacity: 0.75 }]}
         onPress={handleOpen}
+        accessibilityRole="button"
+        accessibilityLabel={`${label}: ${formatDisplay(value)}`}
+        accessibilityHint="Opens the date picker"
+        testID="date-picker-button"
       >
         <Feather name="calendar" size={16} color={C.accent} />
         <Text style={styles.btnText}>{formatDisplay(value)}</Text>
@@ -186,11 +207,4 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
   },
   calIcon: { marginRight: 8 },
-  webInput: {
-    flex: 1,
-    paddingVertical: 14,
-    fontFamily: "Inter_500Medium",
-    fontSize: 14,
-    color: C.text,
-  },
 });
