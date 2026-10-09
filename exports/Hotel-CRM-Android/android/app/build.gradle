@@ -19,6 +19,7 @@ react {
     // works correctly with Expo projects.
     cliFile = new File(["node", "--print", "require.resolve('@expo/cli', { paths: [require.resolve('expo/package.json')] })"].execute(null, rootDir).text.trim())
     bundleCommand = "export:embed"
+    extraPackagerArgs = ["--max-workers", "1"]
 
     /* Folders */
      //   The root of your project, i.e. where "package.json" lives. Default is '../..'
@@ -104,6 +105,11 @@ android {
         release {
             // Sign through Android Studio's Generate Signed Bundle / APK wizard.
             // Never distribute a release signed with the public template debug key.
+            // Opt-in internal distribution uses this machine's unique, locally
+            // generated Android signing certificate (not the template key).
+            if ((findProperty('internalDistribution') ?: 'false').toBoolean()) {
+                signingConfig signingConfigs.debug
+            }
             def enableShrinkResources = findProperty('android.enableShrinkResourcesInReleaseBuilds') ?: 'false'
             shrinkResources enableShrinkResources.toBoolean()
             minifyEnabled enableMinifyInReleaseBuilds

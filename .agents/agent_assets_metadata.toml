@@ -14,3 +14,17 @@ mtime_ms = 1791548289583
 storage_uri = "gcs://replit-rams-assets-pike/rams/assets/repl:b739e04e-cf1d-4225-9b28-7088760ab149/2062c3d0-11c7-40bb-a5bb-295d25960877/b39841b3-fce7-4648-8e09-8c271502394b"
 storage_version_token = "1791548407014088"
 content_type = "application/octet-stream"
+
+[[outputs]]
+id = "pi0zNWMPctqqfnsLopZPR"
+uri = "file://exports/Stay-Pilot-Internal-ARM64.apk"
+type = "unspecified"
+title = "Stay Pilot — Internal Android APK"
+description = "Signed, installable APK for internal distribution. Supports 64-bit ARM Android phones running Android 7.0 or newer. No App Store, Google Play, or Expo Go is required. The hosted CRM backend must be reachable for login."
+logical_id = "12f2c48c-8d0f-4310-96af-e884607c5bca"
+content_hash = "sha256:b1be8eceb2cc184cf42e540efec9bd4e674fcf29419015ce1c74998ffc910632"
+size = 41874831
+mtime_ms = 1791551663535
+storage_uri = "gcs://replit-rams-assets-pike/rams/assets/repl:b739e04e-cf1d-4225-9b28-7088760ab149/12f2c48c-8d0f-4310-96af-e884607c5bca/d88b7643-3087-4b57-b67a-4117797885af"
+storage_version_token = "1791551738529878"
+content_type = "application/octet-stream"

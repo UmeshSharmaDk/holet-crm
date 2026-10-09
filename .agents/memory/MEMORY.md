@@ -7,3 +7,4 @@
 - [Booking reports](booking-reports.md) — PDF exports include all booking data and identity scans; prefer one A4 page without truncation and preserve access controls.
 - [Identity storage](identity-storage.md) — new guest scans need encrypted private persistent storage; preserve legacy photos and fail-safe retry behavior.
 - [Android exports](android-exports.md) — verify standalone dependencies and Android bundling; workspace checks alone do not establish export portability.
+- [Internal distribution](internal-distribution.md) — deliver an installable Android APK for internal use; an App Store release or source ZIP is not the distribution goal.

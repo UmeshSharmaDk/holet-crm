@@ -1,4 +1,4 @@
-modules = ["nodejs-24", "postgresql-16", "python-base-3.13"]
+modules = ["nodejs-24", "postgresql-16", "python-base-3.13", "java-graalvm22.3"]
 
 [[artifacts]]
 id = "artifacts/api-server"
@@ -27,3 +27,4 @@ timeoutMs = 120000
 
 [nix]
 channel = "stable-25_05"
+packages = ["jdk17"]

@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Limit native compiler memory use in the local APK build environment.
+ROOT="$(cd "$(dirname "$(readlink -f "$0")")/../.." && pwd)"
+exec "$ROOT/.android-build-cache/sdk/cmake/3.22.1/bin/ninja.real" -j1 "$@"
