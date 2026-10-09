@@ -36,3 +36,15 @@ PASSWORD_RESET_URL_BASE = "https://crm.myindiatrips.com"
 
 [objectStorage]
 defaultBucketID = "replit-objstore-66787b68-85d2-4c83-9976-7edc4c6ac930"
+
+[[ports]]
+localPort = 8080
+externalPort = 8080
+
+[[ports]]
+localPort = 8081
+externalPort = 80
+
+[[ports]]
+localPort = 18115
+externalPort = 3001
