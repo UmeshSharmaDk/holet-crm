@@ -1,0 +1,10 @@
+node_modules/
+.expo/
+android-bundle-check/
+android/.gradle/
+android/local.properties
+android/build/
+android/app/build/
+*.jks
+*.keystore
+.env.local

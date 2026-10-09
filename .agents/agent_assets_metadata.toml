@@ -1,0 +1,16 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "BcrNcunS2jDvZZqkLCY8O"
+uri = "file://exports/Stay-Pilot-Android-Studio.zip"
+type = "unspecified"
+title = "Stay Pilot — Android Studio Project"
+description = "Download the prepared Android source project and build guide. Includes native Android files, pinned dependencies, and the latest photo-upload fixes. Build and sign the APK in Android Studio."
+logical_id = "2062c3d0-11c7-40bb-a5bb-295d25960877"
+content_hash = "sha256:6e898699ac8362803fc54e9796542beae18479f2d7b2ea7641e52cc2dc36d491"
+size = 1111152
+mtime_ms = 1791548289583
+storage_uri = "gcs://replit-rams-assets-pike/rams/assets/repl:b739e04e-cf1d-4225-9b28-7088760ab149/2062c3d0-11c7-40bb-a5bb-295d25960877/b39841b3-fce7-4648-8e09-8c271502394b"
+storage_version_token = "1791548407014088"
+content_type = "application/octet-stream"

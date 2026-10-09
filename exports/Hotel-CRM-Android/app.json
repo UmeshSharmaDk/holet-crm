@@ -18,7 +18,8 @@
       "bundleIdentifier": "com.staypilot.app"
     },
     "android": {
-      "package": "com.staypilot.app"
+      "package": "com.staypilot.app",
+      "versionCode": 1
     },
     "web": {
       "favicon": "./assets/images/icon.png"

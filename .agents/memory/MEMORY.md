@@ -6,3 +6,4 @@
 - [Date field policy](date-fields.md) — all editable dates need pickers on web and native, including birth dates and booking dates in create/edit forms.
 - [Booking reports](booking-reports.md) — PDF exports include all booking data and identity scans; prefer one A4 page without truncation and preserve access controls.
 - [Identity storage](identity-storage.md) — new guest scans need encrypted private persistent storage; preserve legacy photos and fail-safe retry behavior.
+- [Android exports](android-exports.md) — verify standalone dependencies and Android bundling; workspace checks alone do not establish export portability.
