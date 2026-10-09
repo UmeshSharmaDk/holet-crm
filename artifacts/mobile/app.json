@@ -2,7 +2,7 @@
   "expo": {
     "name": "Stay Pilot",
     "slug": "staypilot",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "staypilot",
@@ -19,7 +19,7 @@
     },
     "android": {
       "package": "com.staypilot.app",
-      "versionCode": 2,
+      "versionCode": 3,
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
@@ -32,7 +32,7 @@
       [
         "expo-router",
         {
-          "origin": "https://crm.outhillsmanali.com/"
+          "origin": "https://crm.myindiatrips.com/"
         }
       ],
       "expo-font",

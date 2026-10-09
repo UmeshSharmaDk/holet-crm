@@ -55,7 +55,7 @@ function stripProtocol(domain) {
 }
 
 function getDeploymentDomain() {
-  return "crm.outhillsmanali.com";
+  return "crm.myindiatrips.com";
 }
 
 function prepareDirectories(timestamp) {

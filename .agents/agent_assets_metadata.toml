@@ -42,3 +42,17 @@ mtime_ms = 1791554650839
 storage_uri = "gcs://replit-rams-assets-pike/rams/assets/repl:b739e04e-cf1d-4225-9b28-7088760ab149/0330d01e-42fc-4aeb-bb01-8fcce16f9eb9/c7a92044-fffd-4714-a839-6877ac2386d7"
 storage_version_token = "1791554796372663"
 content_type = "application/octet-stream"
+
+[[outputs]]
+id = "h7-Xd3sqWRjRz0YuVfBmb"
+uri = "file://exports/Stay-Pilot-Internal-v1.0.2-ARM64.apk"
+type = "unspecified"
+title = "StayPilot Android — custom-domain update (v1.0.2)"
+description = "Install over the previous ARM64 APK. The signed package contains crm.myindiatrips.com, but login cannot work until DNS resolves and Replit hosting allows public API access."
+logical_id = "411e1408-bb81-4617-a918-3797730b06b1"
+content_hash = "sha256:fa8e543957667629344e06e6573a39abb66396e238f72d149e753b73256a4275"
+size = 42253740
+mtime_ms = 1791556197573
+storage_uri = "gcs://replit-rams-assets-pike/rams/assets/repl:b739e04e-cf1d-4225-9b28-7088760ab149/411e1408-bb81-4617-a918-3797730b06b1/b6023af6-4f68-4d8d-ac99-5ae01384d680"
+storage_version_token = "1791556236925126"
+content_type = "application/octet-stream"

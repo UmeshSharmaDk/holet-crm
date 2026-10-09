@@ -33,7 +33,7 @@ const proxyDomains = [
   .filter((domain): domain is string => Boolean(domain))
   .map((domain) => domain.startsWith("http") ? domain : `https://${domain}`);
 const allowedOrigins = [
-  "https://crm.outhillsmanali.com",
+  "https://crm.myindiatrips.com",
   ...proxyDomains,
   ...(process.env.NODE_ENV !== "production" ? ["http://localhost:3000", "http://localhost:8081"] : [])
 ];

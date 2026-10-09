@@ -14,7 +14,7 @@ import { CSRF_COOKIE_NAME } from "../lib/csrf.js";
 const router = Router();
 
 const PASSWORD_RESET_TOKEN_TTL_MINUTES = Number(process.env["PASSWORD_RESET_TOKEN_TTL_MINUTES"] ?? 60);
-const PASSWORD_RESET_URL_BASE = process.env["PASSWORD_RESET_URL_BASE"] ?? "https://crm.outhillsmanali.com";
+const PASSWORD_RESET_URL_BASE = process.env["PASSWORD_RESET_URL_BASE"] ?? "https://crm.myindiatrips.com";
 
 /**
  * A real bcrypt hash compared against when the email is unknown.

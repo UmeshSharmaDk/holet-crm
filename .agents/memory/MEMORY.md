@@ -10,3 +10,4 @@
 - [Internal distribution](internal-distribution.md) — Android and iPhone are for internal use, not a public App Store release; source ZIPs alone are not installers.
 - [StayPilot branding](staypilot-branding.md) — use the supplied gradient building symbol and wordmark consistently across app branding.
 - [Expo preview timing](expo-preview-timing.md) — early white captures can precede font loading; verify readiness before diagnosing a broken page.
+- [Android bundled backend host](android-bundle-env.md) — Gradle may reuse stale JS after host changes; check the actual APK before sharing it.

@@ -28,3 +28,8 @@ timeoutMs = 120000
 [nix]
 channel = "stable-25_05"
 packages = ["jdk17"]
+
+[userenv]
+
+[userenv.production]
+PASSWORD_RESET_URL_BASE = "https://crm.myindiatrips.com"

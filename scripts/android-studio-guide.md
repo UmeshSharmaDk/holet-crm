@@ -23,7 +23,7 @@ RAM is recommended; native builds can need several GB of free disk space.
 The `.env` file contains only the public backend hostname:
 
 ```
-EXPO_PUBLIC_DOMAIN=hotel-management-system--umeshsharmadk.replit.app
+EXPO_PUBLIC_DOMAIN=crm.myindiatrips.com
 ```
 
 Do not add `https://`, `/api`, or a trailing slash. The app adds those itself.
