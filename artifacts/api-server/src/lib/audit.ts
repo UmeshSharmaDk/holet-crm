@@ -8,6 +8,7 @@ import { db, auditLogTable } from "@workspace/db";
  */
 export type AuditAction =
   | "guest_id_scan.read"
+  | "booking.pdf_export"
   | "guest_roster.write"
   | "booking.delete"
   | "agency.delete"

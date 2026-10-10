@@ -1772,6 +1772,93 @@ export const useCreateBooking = <
 };
 
 /**
+ * @summary Download the complete booking form with guest identity documents
+ */
+export const getExportBookingPdfUrl = (id: number) => {
+  return `/api/bookings/${id}/pdf`;
+};
+
+export const exportBookingPdf = async (
+  id: number,
+  options?: RequestInit,
+): Promise<Blob> => {
+  return customFetch<Blob>(getExportBookingPdfUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getExportBookingPdfQueryKey = (id: number) => {
+  return [`/api/bookings/${id}/pdf`] as const;
+};
+
+export const getExportBookingPdfQueryOptions = <
+  TData = Awaited<ReturnType<typeof exportBookingPdf>>,
+  TError = ErrorType<void>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof exportBookingPdf>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getExportBookingPdfQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof exportBookingPdf>>
+  > = ({ signal }) => exportBookingPdf(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof exportBookingPdf>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ExportBookingPdfQueryResult = NonNullable<
+  Awaited<ReturnType<typeof exportBookingPdf>>
+>;
+export type ExportBookingPdfQueryError = ErrorType<void>;
+
+/**
+ * @summary Download the complete booking form with guest identity documents
+ */
+
+export function useExportBookingPdf<
+  TData = Awaited<ReturnType<typeof exportBookingPdf>>,
+  TError = ErrorType<void>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof exportBookingPdf>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getExportBookingPdfQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
  * @summary Get a booking by ID
  */
 export const getGetBookingUrl = (id: number) => {

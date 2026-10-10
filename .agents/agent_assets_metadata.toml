@@ -1,0 +1,58 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "BcrNcunS2jDvZZqkLCY8O"
+uri = "file://exports/Stay-Pilot-Android-Studio.zip"
+type = "unspecified"
+title = "Stay Pilot — Android Studio Project"
+description = "Download the prepared Android source project and build guide. Includes native Android files, pinned dependencies, and the latest photo-upload fixes. Build and sign the APK in Android Studio."
+logical_id = "2062c3d0-11c7-40bb-a5bb-295d25960877"
+content_hash = "sha256:6e898699ac8362803fc54e9796542beae18479f2d7b2ea7641e52cc2dc36d491"
+size = 1111152
+mtime_ms = 1791548289583
+storage_uri = "gcs://replit-rams-assets-pike/rams/assets/repl:b739e04e-cf1d-4225-9b28-7088760ab149/2062c3d0-11c7-40bb-a5bb-295d25960877/b39841b3-fce7-4648-8e09-8c271502394b"
+storage_version_token = "1791548407014088"
+content_type = "application/octet-stream"
+
+[[outputs]]
+id = "pi0zNWMPctqqfnsLopZPR"
+uri = "file://exports/Stay-Pilot-Internal-ARM64.apk"
+type = "unspecified"
+title = "Stay Pilot — Internal Android APK"
+description = "Signed, installable APK for internal distribution. Supports 64-bit ARM Android phones running Android 7.0 or newer. No App Store, Google Play, or Expo Go is required. The hosted CRM backend must be reachable for login."
+logical_id = "12f2c48c-8d0f-4310-96af-e884607c5bca"
+content_hash = "sha256:b1be8eceb2cc184cf42e540efec9bd4e674fcf29419015ce1c74998ffc910632"
+size = 41874831
+mtime_ms = 1791551663535
+storage_uri = "gcs://replit-rams-assets-pike/rams/assets/repl:b739e04e-cf1d-4225-9b28-7088760ab149/12f2c48c-8d0f-4310-96af-e884607c5bca/d88b7643-3087-4b57-b67a-4117797885af"
+storage_version_token = "1791551738529878"
+content_type = "application/octet-stream"
+
+[[outputs]]
+id = "UcPyA-_CWmW8FU1mWraEt"
+uri = "file://exports/Stay-Pilot-Internal-v1.0.1-ARM64.apk"
+type = "unspecified"
+title = "StayPilot Android update — v1.0.1"
+description = "Internal Android ARM64 APK with the complete, untrimmed StayPilot logo and adjusted layout. Android 7 or newer. Signed with the same certificate as the previous APK. Backend hosting must be set to Public for phone sign-in."
+logical_id = "0330d01e-42fc-4aeb-bb01-8fcce16f9eb9"
+content_hash = "sha256:bd5dddd42305e2e46712239a6801ad97f4e17b0a54b2a39be7a1abf8a64dc1bf"
+size = 42253760
+mtime_ms = 1791554650839
+storage_uri = "gcs://replit-rams-assets-pike/rams/assets/repl:b739e04e-cf1d-4225-9b28-7088760ab149/0330d01e-42fc-4aeb-bb01-8fcce16f9eb9/c7a92044-fffd-4714-a839-6877ac2386d7"
+storage_version_token = "1791554796372663"
+content_type = "application/octet-stream"
+
+[[outputs]]
+id = "h7-Xd3sqWRjRz0YuVfBmb"
+uri = "file://exports/Stay-Pilot-Internal-v1.0.2-ARM64.apk"
+type = "unspecified"
+title = "StayPilot Android — custom-domain update (v1.0.2)"
+description = "Install over the previous ARM64 APK. The signed package contains crm.myindiatrips.com, but login cannot work until DNS resolves and Replit hosting allows public API access."
+logical_id = "411e1408-bb81-4617-a918-3797730b06b1"
+content_hash = "sha256:fa8e543957667629344e06e6573a39abb66396e238f72d149e753b73256a4275"
+size = 42253740
+mtime_ms = 1791556197573
+storage_uri = "gcs://replit-rams-assets-pike/rams/assets/repl:b739e04e-cf1d-4225-9b28-7088760ab149/411e1408-bb81-4617-a918-3797730b06b1/b6023af6-4f68-4d8d-ac99-5ae01384d680"
+storage_version_token = "1791556236925126"
+content_type = "application/octet-stream"

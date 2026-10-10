@@ -10,6 +10,7 @@
     "test": "node --import tsx --test --test-concurrency=1 src/__tests__/*.test.ts"
   },
   "dependencies": {
+    "@google-cloud/storage": "^8.3.0",
     "@google/genai": "^1.50.1",
     "@types/multer": "^2.1.0",
     "@workspace/api-zod": "workspace:*",
@@ -23,7 +24,9 @@
     "helmet": "^8.0.0",
     "jsonwebtoken": "^9.0.3",
     "multer": "^2.1.1",
-    "nodemailer": "^8.0.2"
+    "nodemailer": "^8.0.2",
+    "pdfkit": "^0.20.2",
+    "sharp": "^0.35.5"
   },
   "devDependencies": {
     "@types/bcryptjs": "^3.0.0",
@@ -33,6 +36,7 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "catalog:",
     "@types/nodemailer": "^7.0.11",
+    "@types/pdfkit": "^0.17.6",
     "esbuild": "^0.27.3",
     "tsx": "catalog:"
   }

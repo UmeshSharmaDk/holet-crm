@@ -59,6 +59,10 @@
   "dependencies": {
     "@react-native-community/datetimepicker": "^8.4.4",
     "expo-av": "^16.0.8",
+    "expo-file-system": "~19.0.24",
+    "expo-image-manipulator": "~14.0.8",
+    "expo-print": "~15.0.8",
+    "expo-sharing": "~14.0.8",
     "react-native-chart-kit": "^6.12.0"
   }
 }

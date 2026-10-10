@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "Hotel CRM",
-    "slug": "mobile",
-    "version": "1.0.0",
+    "name": "Stay Pilot",
+    "slug": "staypilot",
+    "version": "1.0.2",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "mobile",
+    "scheme": "staypilot",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
@@ -14,17 +14,25 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": false
+      "supportsTablet": false,
+      "bundleIdentifier": "com.staypilot.app"
     },
-    "android": {},
+    "android": {
+      "package": "com.staypilot.app",
+      "versionCode": 3,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      }
+    },
     "web": {
-      "favicon": "./assets/images/icon.png"
+      "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
       [
         "expo-router",
         {
-          "origin": "https://crm.outhillsmanali.com/"
+          "origin": "https://crm.myindiatrips.com/"
         }
       ],
       "expo-font",

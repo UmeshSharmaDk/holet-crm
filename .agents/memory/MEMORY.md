@@ -3,3 +3,12 @@
 - [Gesture verification](gesture-verification.md) — verify actual routes and requests; root touch handlers and navigator snapshots can misrepresent behavior.
 - [Expo dependency alignment](expo-dependency-alignment.md) — keep shared React types SDK-compatible and check transitive type resolution in pnpm workspaces.
 - [Post-merge schema safety](post-merge-schema-safety.md) — unrelated merges must not force database schema reconciliation; use reviewed migrations for persistence changes.
+- [Date field policy](date-fields.md) — all editable dates need pickers on web and native, including birth dates and booking dates in create/edit forms.
+- [Booking reports](booking-reports.md) — PDF exports include all booking data and identity scans; prefer one A4 page without truncation and preserve access controls.
+- [Identity storage](identity-storage.md) — new guest scans need encrypted private persistent storage; preserve legacy photos and fail-safe retry behavior.
+- [Android exports](android-exports.md) — verify standalone dependencies and Android bundling; workspace checks alone do not establish export portability.
+- [Internal distribution](internal-distribution.md) — Android and iPhone are for internal use, not a public App Store release; source ZIPs alone are not installers.
+- [StayPilot branding](staypilot-branding.md) — use the supplied gradient building symbol and wordmark consistently across app branding.
+- [Expo preview timing](expo-preview-timing.md) — early white captures can precede font loading; verify readiness before diagnosing a broken page.
+- [Android bundled backend host](android-bundle-env.md) — Gradle may reuse stale JS after host changes; check the actual APK before sharing it.
+- [Supabase migration target](supabase-migration-target.md) — Supabase is the intended off-Replit PostgreSQL target; identity files also need a separate private-storage migration.
