@@ -11,3 +11,4 @@
 - [StayPilot branding](staypilot-branding.md) — use the supplied gradient building symbol and wordmark consistently across app branding.
 - [Expo preview timing](expo-preview-timing.md) — early white captures can precede font loading; verify readiness before diagnosing a broken page.
 - [Android bundled backend host](android-bundle-env.md) — Gradle may reuse stale JS after host changes; check the actual APK before sharing it.
+- [Supabase migration target](supabase-migration-target.md) — Supabase is the intended off-Replit PostgreSQL target; identity files also need a separate private-storage migration.
